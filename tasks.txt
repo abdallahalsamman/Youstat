@@ -1,0 +1,10 @@
+get all video ids of channel √
+get subtitles √
+	1. if manual subtitles exist 
+	2. get manual subtitles
+	3. if they don't check if thee is automatic subtitles and if they exist get them
+	4. if there is no subtitles, skip current video
+do text analysis 
+	1. feelings statistics
+	2. word frequency statistics
+	3. output if the overall feelings 4. statistics is positive or negative
