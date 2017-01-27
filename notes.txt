@@ -1,25 +1,2 @@
-http://mo.dbxdb.com/Yang/setting.html
-http://video.google.com/timedtext?lang=en&v=HVhli9AtJZ0
 https://tone-analyzer-demo.mybluemix.net/
 http://www.wordcounter.com/cgi-bin/result.cgi
-
-API KEY AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI
-KSI CHANNEL ID UCVtFOytbRpEvzLjvqGG5gxQ
-KSI USERNAME KSIOlajidebt
-
-
-https://www.googleapis.com/youtube/v3/search?key=AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI&channelId=UCVtFOytbRpEvzLjvqGG5gxQ&part=snippet,id&order=date&maxResults=20
-
-https://www.googleapis.com/youtube/v3/channels?part=statistics&id=UCVtFOytbRpEvzLjvqGG5gxQ&key=AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI
-
-
-next page
-https://www.googleapis.com/youtube/v3/search?key=AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI&channelId=UCVtFOytbRpEvzLjvqGG5gxQ&part=snippet,id&order=date&maxResults=50&pageToken=CDIQAA
-
-SUBTITLES REMOVE BOILERPLATE
-<\/text>
-(<.*?>)
-
-https://www.googleapis.com/youtube/v3/channels?part=contentDetails&forUsername=KSIOlajidebt&key=AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI
-
-https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&maxResults=50&playlistId=PLr2SXwjSsDgLURyRLu4zd0_Sm__GouGRY&key=AIzaSyCXGLaX39LmHNWUzSW6ejE9ywvOafNNZfI
