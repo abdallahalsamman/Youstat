@@ -10,7 +10,7 @@ htmlParser = HTMLParser()
 
 # import ipdb; ipdb.set_trace()
 
-API_KEY = os.environ['API_KEY']
+API_KEY = os.environ['YOUTUBE_API_KEY']
 
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
