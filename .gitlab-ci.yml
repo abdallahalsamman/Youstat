@@ -1,0 +1,9 @@
+image: nixos/nix
+before_script:
+- echo -e 'silent\nshow-error\nretry=2' | tee ~/.curlrc > /dev/null
+- nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+- nix-channel --update || true
+- nix-shell --run true >> /dev/null 2>&1 || nix-shell --run true
+test:
+  script:
+  - nix-shell --run 'python -m nose'
