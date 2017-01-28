@@ -15,7 +15,7 @@ API_KEY = os.environ['YOUTUBE_API_KEY']
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
 
-PAGE_SIZE = 30 # get one vid only 50 max
+PAGE_SIZE = 50 # get one vid only 50 max
 TOP_WORDS_SIZE = 30 # the top 30 frequent words
 
 stopwords = ['a', 'about', 'above', 'across', 'after', 'afterwards']
@@ -144,7 +144,6 @@ def get_subtitle_statistics(sub):
 
 def get_playlist(channel, token=None):
 	playlist = get_json(playlist_url(uploads_id(channel), token))
-	# return playlist['items'] # comment this line if you want to go over all the channel
 	if 'nextPageToken' in playlist['items']:
 		return playlist['items'] + get_playlist(playlist['nextPageToken'])
 	else:
