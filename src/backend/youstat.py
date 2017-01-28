@@ -15,7 +15,7 @@ API_KEY = os.environ['YOUTUBE_API_KEY']
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
 
-PAGE_SIZE = 1 # get one vid only 50 max
+PAGE_SIZE = 30 # get one vid only 50 max
 TOP_WORDS_SIZE = 30 # the top 30 frequent words
 
 stopwords = ['a', 'about', 'above', 'across', 'after', 'afterwards']
@@ -107,10 +107,10 @@ def get_json(url):
 
 def get_manual_sub(video_id):
 	subtitle = requests.get('http://video.google.com/timedtext?lang=en&v='+video_id).text
-	return ((video_id, format_subtitles(subtitle)) if subtitle else (video_id, None))
+	return (video_id, format_subtitles(subtitle) if subtitle else  None)
 
 def sub_url(response):
-	matches = re.findall("\"caption_tracks\".*?(https.*lang\%3D(.*?))\\\u0026", response)
+	matches = re.findall("\"caption_tracks\".*?(https.*lang\%3D(..))", response)
 	if matches:
 		url, lang = matches[0]
 		if lang == 'en':
@@ -122,7 +122,7 @@ def get_auto_sub(video_id):
 	url = sub_url(video_page)
 	if url:
 		subtitle = requests.get(url).text
-		return (video_id, format_subtitles(subtitle))
+		return (video_id, format_subtitles(subtitle) if subtitle else None)
 	return (video_id, None)
 
 def split_results(results):
@@ -196,16 +196,19 @@ def get_stats(channel_name):
 	video_ids = [video_id(item) for item in items if is_video(item)]
 
 	manual_subs, video_ids_no_manual_subs = (
-		split_results(get_manual_sub(i) for i in video_ids) )
+		split_results([get_manual_sub(i) for i in video_ids]) )
 
 	auto_subs, video_ids_no_auto_subs = (
-		split_results(get_auto_sub(i) for i in video_ids_no_manual_subs) )
+		split_results([get_auto_sub(i) for i in video_ids_no_manual_subs]) )
 
-	frequent_words = words_frequency(manual_subs, auto_subs)
-	sub = latest_sub(manual_subs, auto_subs)
-	stats = get_subtitle_statistics(sub)
-	beautiful_stats = beautify_stats(stats)
-	return frequent_words
+	if manual_subs or auto_subs:
+		# frequent_words = words_frequency(manual_subs, auto_subs)
+		sub = latest_sub(manual_subs, auto_subs)
+		stats = get_subtitle_statistics(sub)
+		beautiful_stats = beautify_stats(stats)
+		return beautiful_stats
+	else:
+		return "No english subtitles in this channel: "+channel_name
 
 def main():
 	channel_name = sys.argv[1]
