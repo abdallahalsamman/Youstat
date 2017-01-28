@@ -1,2 +1,0 @@
-https://tone-analyzer-demo.mybluemix.net/
-http://www.wordcounter.com/cgi-bin/result.cgi
