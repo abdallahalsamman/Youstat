@@ -1,0 +1,5 @@
+# after changing requirements, freeze them with:
+# pypi2nix -V 2.7 -r requirements.pip
+
+nose
+requests
