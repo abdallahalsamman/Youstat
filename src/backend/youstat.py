@@ -140,12 +140,11 @@ def get_subtitle_statistics(sub):
 	r = requests.post(url = 'https://tone-analyzer-demo.mybluemix.net/api/tone',
 		data = {'text': sub},
 		headers={'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'})
-	import ipdb; ipdb.set_trace()
 	return json.loads(r.text)
 
 def get_playlist(channel, token=None):
 	playlist = get_json(playlist_url(uploads_id(channel), token))
-	return playlist['items'] # remove this line if you want to go over all the channel
+	# return playlist['items'] # comment this line if you want to go over all the channel
 	if 'nextPageToken' in playlist['items']:
 		return playlist['items'] + get_playlist(playlist['nextPageToken'])
 	else:
