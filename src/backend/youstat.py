@@ -49,6 +49,15 @@ def extract_english_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_n
 	return map(lambda x: x[1], manual_subs + auto_subs) + \
 		map(lambda x: x[2], manual_subs_non_en + auto_subs_non_en)
 
+def extract_langs(subtitles):
+	return map(lambda x: x[0], subtitles)
+
+def make_stopwords(langs):
+	stopwords = {}
+	for lang in langs:
+		stopwords[lang] = get_stopwords(lang)
+	return stopwords
+
 def format_subtitles(subtitles):
 	subtitles = htmlParser.unescape(htmlParser.unescape(subtitles))
 	subtitles = subtitles.replace('</text>', '\n')
@@ -138,23 +147,12 @@ def get_playlist(channel, token=None):
 	else:
 		return playlist['items']
 
-def words_frequency(subtitles):
+def words_frequency(subtitles, stopwords):
 	def sort_words_by_freq(words):
 		return sorted(words.items(), key=lambda v: v[1], reverse=True)
 
-	def get_stopwords(lang):
-		def stopwords_file():
-			return STOPWORDS_FOLDER+'/'+lang+'.txt'
-		supported_langs = [name.split('.')[0] for name in os.listdir(STOPWORDS_FOLDER)]
-		if lang in supported_langs:
-			with open( stopwords_file() ) as f:
-			    content = f.read().splitlines()
-			return content
-		else:
-			return []
-
 	def rm_stop_words(subtitle):
-		regex = r'\b('+'|'.join( get_stopwords(  subtitle[0] ) )+r')\b'
+		regex = r'\b('+'|'.join( stopwords[subtitle[0]] )+r')\b'
 		sub_clean_1 = re.sub('[?!,.\(\)\[\]]', ' ', subtitle[1])
 		sub_clean_2 = re.sub('["-]', '', sub_clean_1)
 		clean_subtitle = re.sub(regex, '', sub_clean_2, flags=re.IGNORECASE)
@@ -178,6 +176,17 @@ def words_frequency(subtitles):
 
 	words = process_subs(subtitles)
 	return sort_words_by_freq(words)[0:TOP_WORDS_SIZE]
+
+def get_stopwords(lang):
+	def stopwords_file():
+		return STOPWORDS_FOLDER+'/'+lang+'.txt'
+	supported_langs = [name.split('.')[0] for name in os.listdir(STOPWORDS_FOLDER)]
+	if lang in supported_langs:
+		with open( stopwords_file() ) as f:
+			content = f.read().splitlines()
+		return content
+	else:
+		return []
 
 def beautify_stats(stats):
 	def beautify_category(category):
@@ -203,7 +212,7 @@ def get_stats(channel_name):
 	if manual_subs or auto_subs or manual_subs_non_en or auto_subs_non_en:
 		original_subs = extract_original_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
 		english_subs = extract_english_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
-		frequent_words = words_frequency( original_subs )
+		frequent_words = words_frequency( original_subs, make_stopwords( extract_langs ( original_subs ) ) )
 		stats = get_subtitle_statistics( english_subs[0][1] )
 		beautiful_stats = beautify_stats(stats)
 		return beautiful_stats
