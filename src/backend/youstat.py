@@ -238,7 +238,6 @@ def get_stats(channel_name):
 	auto_subs, auto_subs_non_en, video_ids_no_auto_subs = (
 		split_results([get_auto_sub(i) for i in video_ids_no_manual_subs]) )
 
-	import ipdb; ipdb.set_trace()
 	if manual_subs or auto_subs or manual_subs_non_en or auto_subs_non_en:
 		# frequent_words = words_frequency(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
 		sub = latest_en_sub(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
