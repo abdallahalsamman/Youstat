@@ -15,8 +15,8 @@ API_KEY = os.environ['YOUTUBE_API_KEY']
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
 
-PAGE_SIZE = 50 # get one vid only 50 max
-TOP_WORDS_SIZE = 30 # the top 30 frequent words
+PAGE_SIZE = 1 # get one vid only 50 max
+TOP_WORDS_SIZE = 50 # the top 30 frequent words
 
 stopwords = ['a', 'about', 'above', 'across', 'after', 'afterwards']
 stopwords += ['again', 'against', 'all', 'almost', 'alone', 'along']
@@ -83,11 +83,16 @@ def playlist_url(id, token):
 def uploads_id(channel):
 	return channel['items'][0]['contentDetails']['relatedPlaylists']['uploads']
 
-def latest_sub(videos_manual_subs, videos_auto_subs):
+def latest_en_sub(videos_manual_subs, videos_manual_subs_translated,\
+ 				videos_auto_subs, videos_auto_subs_translated):
 	if videos_manual_subs:
-		return videos_manual_subs[0][1]
+		return videos_manual_subs[0][1][1]
 	if videos_auto_subs:
-		return videos_auto_subs[0][1]
+		return videos_auto_subs[0][1][1]
+	if videos_manual_subs_translated:
+		return videos_manual_subs_translated[0][2][1]
+	if videos_auto_subs_translated:
+		return videos_auto_subs_translated[0][2][1]
 
 def video_id(vid):
 	return vid['contentDetails']['videoId']
@@ -101,39 +106,72 @@ def format_subtitles(subtitles):
 	subtitles = re.sub('<.*?>', '', subtitles)
 	return subtitles
 
+def get_text(url):
+	return requests.get(url).text
+
 def get_json(url):
-	page = requests.get(url) # gets the content of the url that fetches the videos
-	return json.loads(page.text) # parses the content
+	return json.loads( get_text(url) )
+
+def translated_sub(url):
+	return url + "&tlang=en"
+
+def create_subtitle(lang, url):
+	return { 'lang': lang, 'url': url }
+
+def make_subtitle(subtitle, translate=False):
+	url = translated_sub(subtitle['url']) if translate else subtitle['url']
+	return  (  subtitle['lang']
+			 , format_subtitles(get_text(url)) or None )
+
+def url_manual_sub(video_id, lang):
+	return 'http://video.google.com/timedtext?lang='+lang+'&v='+video_id
 
 def get_manual_sub(video_id):
-	subtitle = requests.get('http://video.google.com/timedtext?lang=en&v='+video_id).text
-	return (video_id, format_subtitles(subtitle) if subtitle else  None)
+	list_manual_subs = get_text('http://video.google.com/timedtext?type=list&v='+video_id)
+	if '<track' in list_manual_subs:
+		langs = re.findall('lang_code="(.*?)"', list_manual_subs)
+		default_lang = re.findall('<track.*lang_code="(.*?)".*lang_default="true".*\/>', list_manual_subs)[0]
+		subtitle = create_subtitle(default_lang, url_manual_sub(video_id, default_lang))
+		if default_lang == 'en':
+			return (video_id, make_subtitle(subtitle), None)
+		else:
+			url_translated_sub = url_manual_sub(video_id, 'en') if 'en' in list_manual_subs \
+				else translated_sub(url_manual_sub(video_id, default_lang))
+			translated_subtitle = create_subtitle('en', 'url')
+			return (video_id, make_subtitle(subtitle), make_subtitle(translated_subtitle))
+	else:
+		return (video_id, None, None)
 
 def sub_url(response):
-	matches = re.findall("\"caption_tracks\".*?(https.*lang\%3D(..))", response)
+	matches = re.findall("\"caption_tracks\".*?(https.*?lang\%3D(..))", response)
 	if matches:
 		url, lang = matches[0]
-		if lang == 'en':
-			return urllib.unquote(url).decode('utf8')
-	return None
+		url_decoded = urllib.unquote(url).decode('utf8')
+		return (  create_subtitle(lang, url_decoded)
+				, create_subtitle('en', translated_sub(url_decoded)) if lang != 'en' else None )
+	return (None, None)
 
 def get_auto_sub(video_id):
-	video_page = requests.get('http://youtube.com/watch?v='+video_id).text
-	url = sub_url(video_page)
-	if url:
-		subtitle = requests.get(url).text
-		return (video_id, format_subtitles(subtitle) if subtitle else None)
-	return (video_id, None)
+	video_page = get_text('http://youtube.com/watch?v='+video_id)
+	default_sub, translated_sub = sub_url(video_page)
+	if default_sub and not translated_sub:
+		return (video_id, make_subtitle(default_sub), None)
+	if default_sub and translated_sub:
+		return (video_id, make_subtitle(default_sub), make_subtitle(translated_sub))
+	return (video_id, None, None)
 
 def split_results(results):
-	oks = []
-	errs = []
-	for (id, result) in results:
-		if result:
-			oks += [(id, result)]
+	english_videos = []
+	non_english_videos = []
+	no_subtitle_videos = []
+	for (id, default_subtitle, translated_subtitle) in results:
+		if default_subtitle and translated_subtitle:
+			non_english_videos += [(id, default_subtitle, translated_subtitle)]
+		elif default_subtitle:
+			english_videos += [(id, default_subtitle)]
 		else:
-			errs += [id]
-	return (oks, errs)
+			no_subtitle_videos += [id]
+	return (english_videos, non_english_videos, no_subtitle_videos)
 
 
 def get_subtitle_statistics(sub):
@@ -144,8 +182,8 @@ def get_subtitle_statistics(sub):
 
 def get_playlist(channel, token=None):
 	playlist = get_json(playlist_url(uploads_id(channel), token))
-	if 'nextPageToken' in playlist['items']:
-		return playlist['items'] + get_playlist(playlist['nextPageToken'])
+	if 'nextPageToken' in playlist:
+		return playlist['items'] + get_playlist(channel, playlist['nextPageToken'])
 	else:
 		return playlist['items']
 
@@ -194,20 +232,21 @@ def get_stats(channel_name):
 	items = get_playlist(channel)
 	video_ids = [video_id(item) for item in items if is_video(item)]
 
-	manual_subs, video_ids_no_manual_subs = (
+	manual_subs, manual_subs_non_en, video_ids_no_manual_subs = (
 		split_results([get_manual_sub(i) for i in video_ids]) )
 
-	auto_subs, video_ids_no_auto_subs = (
+	auto_subs, auto_subs_non_en, video_ids_no_auto_subs = (
 		split_results([get_auto_sub(i) for i in video_ids_no_manual_subs]) )
 
-	if manual_subs or auto_subs:
-		# frequent_words = words_frequency(manual_subs, auto_subs)
-		sub = latest_sub(manual_subs, auto_subs)
+	import ipdb; ipdb.set_trace()
+	if manual_subs or auto_subs or manual_subs_non_en or auto_subs_non_en:
+		# frequent_words = words_frequency(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
+		sub = latest_en_sub(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
 		stats = get_subtitle_statistics(sub)
 		beautiful_stats = beautify_stats(stats)
 		return beautiful_stats
 	else:
-		return "No english subtitles in this channel: "+channel_name
+		return "No subtitles in this channel: "+channel_name
 
 def main():
 	channel_name = sys.argv[1]
