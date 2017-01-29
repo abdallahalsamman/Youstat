@@ -15,8 +15,8 @@ API_KEY = os.environ['YOUTUBE_API_KEY']
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
 
-PAGE_SIZE = 1 # get one vid only 50 max
-TOP_WORDS_SIZE = 50 # the top 30 frequent words
+PAGE_SIZE = 50 # get one vid only 50 max
+TOP_WORDS_SIZE = 30 # the top 30 frequent words
 
 stopwords = ['a', 'about', 'above', 'across', 'after', 'afterwards']
 stopwords += ['again', 'against', 'all', 'almost', 'alone', 'along']
@@ -128,7 +128,7 @@ def url_manual_sub(video_id, lang):
 
 def get_manual_sub(video_id):
 	list_manual_subs = get_text('http://video.google.com/timedtext?type=list&v='+video_id)
-	if '<track' in list_manual_subs:
+	if 'lang_default="true"' in list_manual_subs:
 		langs = re.findall('lang_code="(.*?)"', list_manual_subs)
 		default_lang = re.findall('<track.*lang_code="(.*?)".*lang_default="true".*\/>', list_manual_subs)[0]
 		subtitle = create_subtitle(default_lang, url_manual_sub(video_id, default_lang))
