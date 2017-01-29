@@ -50,13 +50,7 @@ def extract_english_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_n
 		map(lambda x: x[2], manual_subs_non_en + auto_subs_non_en)
 
 def extract_langs(subtitles):
-	return map(lambda x: x[0], subtitles)
-
-def make_stopwords(langs):
-	stopwords = {}
-	for lang in langs:
-		stopwords[lang] = get_stopwords(lang)
-	return stopwords
+	return list(set(map(lambda x: x[0], subtitles)))
 
 def format_subtitles(subtitles):
 	subtitles = htmlParser.unescape(htmlParser.unescape(subtitles))
@@ -177,7 +171,7 @@ def words_frequency(subtitles, stopwords):
 	words = process_subs(subtitles)
 	return sort_words_by_freq(words)[0:TOP_WORDS_SIZE]
 
-def get_stopwords(lang):
+def get_stopwords_lang(lang):
 	def stopwords_file():
 		return STOPWORDS_FOLDER+'/'+lang+'.txt'
 	supported_langs = [name.split('.')[0] for name in os.listdir(STOPWORDS_FOLDER)]
@@ -187,6 +181,9 @@ def get_stopwords(lang):
 		return content
 	else:
 		return []
+
+def get_stopwords(langs):
+	return { lang: get_stopwords_lang(lang) for lang in langs }
 
 def beautify_stats(stats):
 	def beautify_category(category):
@@ -212,7 +209,8 @@ def get_stats(channel_name):
 	if manual_subs or auto_subs or manual_subs_non_en or auto_subs_non_en:
 		original_subs = extract_original_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
 		english_subs = extract_english_subs(manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
-		frequent_words = words_frequency( original_subs, make_stopwords( extract_langs ( original_subs ) ) )
+		stopwords = get_stopwords( extract_langs ( original_subs ) )
+		frequent_words = words_frequency( original_subs, stopwords )
 		stats = get_subtitle_statistics( english_subs[0][1] )
 		beautiful_stats = beautify_stats(stats)
 		return beautiful_stats
