@@ -6,4 +6,4 @@ before_script:
 - nix-shell --run true >> /dev/null 2>&1 || nix-shell --run true
 test:
   script:
-  - nix-shell --run 'python -m nose --with-coverage --cover-min-percentag 100'
+  - nix-shell --run 'python -m nose --with-coverage --cover-min-percentag 100 --cover-package backend'
