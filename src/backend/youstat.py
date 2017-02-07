@@ -222,12 +222,12 @@ def main():
         url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
             split_results([make_auto_sub(i, get_video_page(i)) for i in video_ids_no_manual_subs]) )
 
-        manual_subs =
+        manual_subs = \
             [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
                 for sub in url_manual_subs
             ]
 
-        auto_subs =
+        auto_subs = \
             [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
                 for sub in url_auto_subs
             ]
