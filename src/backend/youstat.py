@@ -162,7 +162,7 @@ def words_frequency(subtitles, stopwords):
 
     def rm_stop_words(subtitle):
         regex = r'\b('+'|'.join( stopwords[subtitle[0]] )+r')\b'
-        sub_clean_1 = re.sub('[?!,.\(\)\[\]]', ' ', subtitle[1])
+        sub_clean_1 = re.sub('[\?\!\,\.\(\)\[\]\'\*]', ' ', subtitle[1])
         sub_clean_2 = re.sub('["-]', '', sub_clean_1)
         clean_subtitle = re.sub(regex, '', sub_clean_2, flags=re.IGNORECASE)
         return clean_subtitle
@@ -209,43 +209,55 @@ def beautify_stats(stats):
         return { 'category_name': category['category_name'], 'tones': tones }
     return map(beautify_category, stats['document_tone']['tone_categories'])
 
-def get_stats(channel_name):
-    channel_name = channel_name
-    channel = get_channel(channel_name)
-    items = get_playlist(channel)
-    video_ids = [video_id(item) for item in items if is_video(item)]
+def get_frequent_words(subtitles):
+    original_subs = extract_original_subs(subtitles)
+    stopwords = get_stopwords( extract_langs ( original_subs ) )
+    frequent_words = words_frequency( original_subs, stopwords )
+    return frequent_words
 
-    url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
-        split_results([make_manual_sub(i, get_manual_sub_langs(i)) for i in video_ids]) )
-
-    url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
-        split_results([make_auto_sub(i, get_video_page(i)) for i in video_ids_no_manual_subs]) )
-
-    manual_subs, auto_subs = tuple( [ ( sub[0]
-                                    , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                                      for sub in sub_cat] for sub_cat in (url_manual_subs, url_auto_subs) )
-    manual_subs_non_en, auto_subs_non_en = tuple( [ ( sub[0]
-                                      , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
-                                      , ( sub[2][0], format_subtitles( get_text( sub[2][1] ))))
-                                      for sub in sub_cat] for sub_cat in (url_manual_subs_non_en, url_auto_subs_non_en) )
-
-    if manual_subs or auto_subs or manual_subs_non_en or auto_subs_non_en:
-        subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
-        original_subs = extract_original_subs(subtitles)
-        english_subs = extract_english_subs(subtitles)
-        stopwords = get_stopwords( extract_langs ( original_subs ) )
-        frequent_words = words_frequency( original_subs, stopwords )
-        # stats = get_subtitle_statistics( english_subs[0][1] )
-        # beautiful_stats = beautify_stats(stats)
-        # return beautiful_stats
-        return frequent_words
-    else:
-        return "No subtitles in this channel: "+channel_name
+def get_stats(subtitles):
+    english_subs = extract_english_subs(subtitles)
+    stats = get_subtitle_statistics( english_subs[0][1] )
+    beautiful_stats = beautify_stats(stats)
+    return beautiful_stats
 
 def main():
     try:
         channel_name = sys.argv[1]
-        print get_stats(channel_name)
+        channel = get_channel(channel_name)
+        items = get_playlist(channel)
+        video_ids = [video_id(item) for item in items if is_video(item)]
+
+        url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
+            split_results([make_manual_sub(i, get_manual_sub_langs(i)) for i in video_ids]) )
+
+        url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
+            split_results([make_auto_sub(i, get_video_page(i)) for i in video_ids_no_manual_subs]) )
+
+        manual_subs = [ ( sub[0]
+                      , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
+                      for sub in url_manual_subs]
+
+        auto_subs = [ ( sub[0]
+                    , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
+                    for sub in url_auto_subs]
+
+        manual_subs_non_en = [ ( sub[0]
+                             , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
+                             , ( sub[2][0], format_subtitles( get_text( sub[2][1] ))))
+                             for sub in url_manual_subs_non_en ]
+
+        auto_subs_non_en = [ ( sub[0]
+                           , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
+                           , ( sub[2][0], format_subtitles( get_text( sub[2][1] ))))
+                           for sub in url_auto_subs_non_en ]
+
+        subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
+        if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3]:
+            print get_frequent_words(subtitles)
+            print get_stats(subtitles)
+        else:
+            print "No subtitles in this channel: "+channel_name
     except:
         if DEBUG:
             type, value, tb = sys.exc_info()
