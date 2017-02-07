@@ -222,26 +222,28 @@ def main():
         url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
             split_results([make_auto_sub(i, get_video_page(i)) for i in video_ids_no_manual_subs]) )
 
-        manual_subs = [ (
-                        sub[0]
-                        , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                      for sub in url_manual_subs]
+        manual_subs =
+            [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
+                for sub in url_manual_subs
+            ]
 
-        auto_subs = [ (
-                        sub[0]
-                        , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                    for sub in url_auto_subs]
+        auto_subs =
+            [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
+                for sub in url_auto_subs
+            ]
 
-        manual_subs, auto_subs = tuple( [ (
-                                        sub[0]
-                                    , ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                                      for sub in sub_cat] for sub_cat in (url_manual_subs, url_auto_subs) )
+        manual_subs, auto_subs = tuple(
+            [ ( sub[0]
+              , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
+              ) for sub in sub_cat
+            ] for sub_cat in (url_manual_subs, url_auto_subs) )
 
-        manual_subs_non_en, auto_subs_non_en = tuple( [ (
-                                        sub[0]
-                                      , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
-                                      , ( sub[2][0], format_subtitles( get_text( sub[2][1] ))))
-                                      for sub in sub_cat] for sub_cat in (url_manual_subs_non_en, url_auto_subs_non_en) )
+        manual_subs_non_en, auto_subs_non_en = tuple(
+            [ ( sub[0]
+              , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
+              , ( sub[2][0], format_subtitles( get_text( sub[2][1] )))
+                ) for sub in sub_cat
+            ] for sub_cat in (url_manual_subs_non_en, url_auto_subs_non_en) )
 
         subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
         if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3]:
@@ -249,8 +251,7 @@ def main():
             english_subs = extract_english_subs(subtitles)
             stopwords = get_stopwords( extract_langs ( original_subs ) )
             frequent_words = words_frequency( original_subs, stopwords )
-            print frequent_words
-            print beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
+            beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
         else:
             print "No subtitles in this channel: "+channel_name
     except:
