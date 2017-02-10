@@ -119,15 +119,15 @@ def make_manual_sub(video_id, manual_subs_page):
             subtitle = create_subtitle(default_lang, url_manual_sub(video_id, default_lang))
             if default_lang in ['en', 'en-GB']:
                 return (video_id
-                         , ( subtitle['lang'], subtitle['url'] )
-                         , None)
+                    , ( subtitle['lang'], subtitle['url'] )
+                    , None)
             else:
                 url_translated_sub = url_manual_sub(video_id, 'en') if 'en' in langs \
                     else translated_sub(url_manual_sub(video_id, default_lang))
                 translated_subtitle = create_subtitle('en', url_translated_sub)
                 return (video_id
-                        , ( subtitle['lang'], subtitle['url'] )
-                        , ( translated_subtitle['lang'], translated_subtitle['url'] ))
+                    , ( subtitle['lang'], subtitle['url'] )
+                    , ( translated_subtitle['lang'], translated_subtitle['url'] ))
     return (video_id, None, None)
 
 def make_auto_sub(video_id, video_page):
@@ -269,13 +269,14 @@ def main():
             [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ] )
 
         manual_subs_non_en, auto_subs_non_en = tuple(
-            [ ( sub[0]
-              , ( sub[1][0], format_subtitles( (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text ))
-              , ( sub[2][0], format_subtitles( (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text ))
-                ) for index, sub in enumerate(sub_cat)
+            [
+                ( sub[0]
+                , ( sub[1][0], format_subtitles( (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text ))
+                , ( sub[2][0], format_subtitles( (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text ))
+                )
+                for index, sub in enumerate(sub_cat)
                 if (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index]
-                and
-                (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
+                    and (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
             ] for cat_ind, sub_cat in enumerate( (url_manual_subs_non_en, url_auto_subs_non_en) ) )
 
         if VERBOSE:
