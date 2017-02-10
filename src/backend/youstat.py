@@ -5,7 +5,6 @@ import requests
 import grequests
 import os
 import sys
-import traceback, code
 from optparse import OptionParser
 
 from HTMLParser import HTMLParser
@@ -14,7 +13,9 @@ htmlParser = HTMLParser()
 # import ipdb; ipdb.set_trace()
 
 API_KEY = os.environ['YOUTUBE_API_KEY']
-VERBOSE = False
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+if DEBUG:
+    import traceback, code
 
 connection_limit = 500
 s = requests.Session()
@@ -298,13 +299,14 @@ def main():
         else:
             print "No subtitles in this channel: " + channel_name
     except:
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        last_frame = tb
-        frame = last_frame.tb_frame
-        ns = dict(frame.f_globals)
-        ns.update(frame.f_locals)
-        code.interact(local=ns)
+        if DEBUG:
+            type, value, tb = sys.exc_info()
+            traceback.print_exc()
+            last_frame = tb
+            frame = last_frame.tb_frame
+            ns = dict(frame.f_globals)
+            ns.update(frame.f_locals)
+            code.interact(local=ns)
 
 if __name__ == '__main__':
     parser = OptionParser()
