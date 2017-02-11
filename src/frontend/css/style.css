@@ -1,0 +1,41 @@
+body{
+    font-family: 'Arial';
+}
+
+#logo_you, #logo_stat{
+    font-size: 72px;
+    letter-spacing: 5px;
+}
+
+#logo_stat{
+    background-color: red;
+    color: white;
+    padding: 4px;
+    border-radius: 5px;
+}
+
+#input_channel, #btn_submit{
+    height: 50px;
+    vertical-align: middle;
+}
+
+#input_channel{
+    padding: 0px 5px;
+    font-size: 18px;
+    width: 30%;
+}
+
+#btn_submit{
+    width: 50px;
+}
+
+#result table{
+    border-collapse: collapse;
+    width:40%;
+    font-size: 30px;
+    text-align: center;
+}
+
+#result table td{
+padding: 7px;
+}
