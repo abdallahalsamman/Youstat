@@ -2,8 +2,10 @@ import json
 import re
 import urllib
 import requests
+import grequests
 import os
 import sys
+from optparse import OptionParser
 
 from HTMLParser import HTMLParser
 htmlParser = HTMLParser()
@@ -12,14 +14,20 @@ htmlParser = HTMLParser()
 
 API_KEY = os.environ['YOUTUBE_API_KEY']
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+if DEBUG:
+    import traceback, code
+
+connection_limit = 500
+s = requests.Session()
+a = requests.adapters.HTTPAdapter(max_retries=3, pool_connections=connection_limit, pool_maxsize=connection_limit)
+b = requests.adapters.HTTPAdapter(max_retries=3, pool_connections=connection_limit, pool_maxsize=connection_limit)
+s.mount('http://', a)
+s.mount('https://', b)
 
 # CHANNEL_NAME = "nigahiga" # CHANNEL WITHOUT AUTO SUBTITLES BUT WITH MANUAL SUBTITLES
 # CHANNEL_NAME = "KSIOlajidebt" # CHANNEL WITHOUT MANUAL SUBTITLES BUT WITH AUTO SUBTITLES
 
 PAGE_SIZE = 50
-if DEBUG:
-    import traceback, sys, code
-    PAGE_SIZE = 2
 
 TOP_WORDS_SIZE = 30 # the top 30 frequent words
 STOPWORDS_FOLDER = os.path.dirname(os.path.abspath(__file__)) + "/" + "stopwords"
@@ -37,11 +45,11 @@ def playlist_url(id, token):
 def uploads_id(channel):
     return channel['items'][0]['contentDetails']['relatedPlaylists']['uploads']
 
-def video_id(vid):
-    return vid['contentDetails']['videoId']
+def extract_video_id(video):
+    return video['contentDetails']['videoId']
 
-def is_video(vid):
-    return ('videoId' in vid['contentDetails'])
+def is_video(video):
+    return ('videoId' in video['contentDetails'])
 
 def extract_original_subs(subtitles):
     manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en = subtitles
@@ -61,8 +69,15 @@ def format_subtitles(subtitles):
     subtitles = re.sub('<.*?>', '', subtitles)
     return subtitles
 
+def greq_get_text(url, index, total):
+    def feedback(r, *args, **kwargs):
+        if VERBOSE:
+            print("{1}/{2} - {0} fetched".format(r.url, index, total))
+        return r
+    return grequests.get(url, callback=feedback, timeout=1, session=s)
+
 def get_text(url):
-    return requests.get(url).text
+    return s.get(url).text
 
 def get_json(url):
     return json.loads( get_text(url) )
@@ -82,14 +97,14 @@ def sub_url(src):
         url, lang = matches[0]
         url_decoded = urllib.unquote(url).decode('utf8')
         return (  create_subtitle(lang, url_decoded)
-                , create_subtitle('en', translated_sub(url_decoded)) if lang != 'en' else None )
+                , create_subtitle('en', translated_sub(url_decoded)) if lang not in ['en', 'en-GB'] else None )
     return (None, None)
 
-def get_manual_sub_langs(video_id):
-    return get_text('http://video.google.com/timedtext?type=list&v='+video_id)
+def get_manual_sub_langs(video_id, index, total):
+    return greq_get_text('http://video.google.com/timedtext?type=list&v='+video_id, index, total)
 
-def get_video_page(video_id):
-    return get_text('http://youtube.com/watch?v='+video_id)
+def get_video_page(video_id, index, total):
+    return greq_get_text('https://www.youtube.com/watch?v='+video_id, index, total)
 
 def available_manual_subs(src):
     langs = re.findall('lang_code="(.*?)"', src)
@@ -99,33 +114,34 @@ def available_manual_subs(src):
     return (None, langs)
 
 def make_manual_sub(video_id, manual_subs_page):
-    default_lang, langs = available_manual_subs( manual_subs_page )
-    if langs:
-        subtitle = create_subtitle(default_lang, url_manual_sub(video_id, default_lang))
-        if default_lang == 'en':
-            return (video_id
-                     , ( subtitle['lang'], subtitle['url'] )
-                     , None)
-        else:
-            url_translated_sub = url_manual_sub(video_id, 'en') if 'en' in langs \
-                else translated_sub(url_manual_sub(video_id, default_lang))
-            translated_subtitle = create_subtitle('en', url_translated_sub)
-            return (video_id
+    if manual_subs_page:
+        default_lang, langs = available_manual_subs( manual_subs_page )
+        if default_lang:
+            subtitle = create_subtitle(default_lang, url_manual_sub(video_id, default_lang))
+            if default_lang in ['en', 'en-GB']:
+                return (video_id
+                    , ( subtitle['lang'], subtitle['url'] )
+                    , None)
+            else:
+                url_translated_sub = url_manual_sub(video_id, 'en') if 'en' in langs \
+                    else translated_sub(url_manual_sub(video_id, default_lang))
+                translated_subtitle = create_subtitle('en', url_translated_sub)
+                return (video_id
                     , ( subtitle['lang'], subtitle['url'] )
                     , ( translated_subtitle['lang'], translated_subtitle['url'] ))
-    else:
-        return (video_id, None, None)
+    return (video_id, None, None)
 
 def make_auto_sub(video_id, video_page):
-    default_sub, translated_sub = sub_url(video_page)
-    if default_sub and not translated_sub:
-        return (video_id
-                , ( default_sub['lang'], default_sub['url'] )
-                , None)
-    if default_sub and translated_sub:
-        return (video_id
-                , ( default_sub['lang'], default_sub['url'] )
-                , ( translated_sub['lang'], translated_sub['url'] ))
+    if video_page:
+        default_sub, translated_sub = sub_url(video_page)
+        if default_sub and not translated_sub:
+            return (video_id
+                    , ( default_sub['lang'], default_sub['url'] )
+                    , None)
+        if default_sub and translated_sub:
+            return (video_id
+                    , ( default_sub['lang'], default_sub['url'] )
+                    , ( translated_sub['lang'], translated_sub['url'] ) )
     return (video_id, None, None)
 
 def split_results(results):
@@ -142,15 +158,13 @@ def split_results(results):
     return (english_videos, non_english_videos, no_subtitle_videos)
 
 def get_subtitle_statistics(sub):
-    r = requests.post(url = 'https://tone-analyzer-demo.mybluemix.net/api/tone',
+    r = s.post(url = 'https://tone-analyzer-demo.mybluemix.net/api/tone',
         data = {'text': sub},
         headers={'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'})
     return json.loads(r.text)
 
 def get_playlist(channel, token=None):
     playlist = get_json(playlist_url(uploads_id(channel), token))
-    if DEBUG:
-        return playlist['items']
     if 'nextPageToken' in playlist:
         return playlist['items'] + get_playlist(channel, playlist['nextPageToken'])
     else:
@@ -162,8 +176,8 @@ def words_frequency(subtitles, stopwords):
 
     def rm_stop_words(subtitle):
         regex = r'\b('+'|'.join( stopwords[subtitle[0]] )+r')\b'
-        sub_clean_1 = re.sub('[\?\!\,\.\(\)\[\]\'\*]', ' ', subtitle[1])
-        sub_clean_2 = re.sub('["-]', '', sub_clean_1)
+        sub_clean_1 = re.sub('[\,\.\(\)\[\]\*-]', ' ', subtitle[1])
+        sub_clean_2 = re.sub('["]', '', sub_clean_1)
         clean_subtitle = re.sub(regex, '', sub_clean_2, flags=re.IGNORECASE)
         return clean_subtitle
 
@@ -172,7 +186,7 @@ def words_frequency(subtitles, stopwords):
         for word in subtitle.split():
             if word in words:
                 words[word] += 1
-            else:
+            elif len(word) > 1:
                 words[word] = 1
         return words
 
@@ -211,39 +225,68 @@ def beautify_stats(stats):
 
 def main():
     try:
-        channel_name = sys.argv[1]
+        channel_name = args[0]
         channel = get_channel(channel_name)
         items = get_playlist(channel)
-        video_ids = [video_id(item) for item in items if is_video(item)]
+        video_ids = [extract_video_id(item) for item in items if is_video(item)]
+        video_ids_len = len(video_ids)
+        manual_sub_langs = grequests.map(
+            [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids) ])
 
         url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
-            split_results([make_manual_sub(i, get_manual_sub_langs(i)) for i in video_ids]) )
+            split_results([make_manual_sub(video_id, manual_sub_langs[index].text) for index, video_id in enumerate(video_ids) if manual_sub_langs[index]]) )
+
+        video_ids_no_manual_subs_len = len(video_ids_no_manual_subs)
+        videos_pages = grequests.map(
+            [ get_video_page(i, index, video_ids_no_manual_subs_len) for index, i in enumerate(video_ids_no_manual_subs) ] )
 
         url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
-            split_results([make_auto_sub(i, get_video_page(i)) for i in video_ids_no_manual_subs]) )
+            split_results([make_auto_sub(video_id, videos_pages[index].text) for index, video_id in enumerate(video_ids_no_manual_subs) if videos_pages[index] ]) )
 
-        manual_subs = \
-            [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                for sub in url_manual_subs
-            ]
-
-        auto_subs = \
-            [ ( sub[0], ( sub[1][0], format_subtitles( get_text( sub[1][1] ))))
-                for sub in url_auto_subs
-            ]
+        url_manual_subs_len = len(url_manual_subs)
+        url_auto_subs_len = len(url_auto_subs)
+        manual_subs_pages = grequests.map(
+            [ greq_get_text(sub[1][1], index, url_manual_subs_len) for index, sub in enumerate(url_manual_subs) ] )
+        auto_subs_pages = grequests.map(
+            [ greq_get_text(sub[1][1], index, url_auto_subs_len) for index, sub in enumerate(url_auto_subs) ] )
 
         manual_subs, auto_subs = tuple(
             [ ( sub[0]
-              , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
-              ) for sub in sub_cat
-            ] for sub_cat in (url_manual_subs, url_auto_subs) )
+              , ( sub[1][0], format_subtitles( (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index].text ))
+              ) for index, sub in enumerate(sub_cat)
+              if (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index]
+            ] for cat_ind, sub_cat in enumerate( (url_manual_subs, url_auto_subs) ) )
+
+        url_manual_subs_non_en_len = len(url_manual_subs_non_en)
+        url_auto_subs_non_en_len = len(url_auto_subs_non_en)
+
+        manual_subs_non_en_pages = grequests.map(
+            [ greq_get_text(sub[1][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ] )
+        manual_subs_non_en_trans_pages = grequests.map(
+            [ greq_get_text(sub[2][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ] )
+        auto_subs_non_en_pages = grequests.map(
+            [ greq_get_text(sub[1][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ] )
+        auto_subs_non_en_trans_pages = grequests.map(
+            [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ] )
 
         manual_subs_non_en, auto_subs_non_en = tuple(
-            [ ( sub[0]
-              , ( sub[1][0], format_subtitles( get_text( sub[1][1] )))
-              , ( sub[2][0], format_subtitles( get_text( sub[2][1] )))
-                ) for sub in sub_cat
-            ] for sub_cat in (url_manual_subs_non_en, url_auto_subs_non_en) )
+            [
+                ( sub[0]
+                , ( sub[1][0], format_subtitles( (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text ))
+                , ( sub[2][0], format_subtitles( (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text ))
+                )
+                for index, sub in enumerate(sub_cat)
+                if (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index]
+                    and (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
+            ] for cat_ind, sub_cat in enumerate( (url_manual_subs_non_en, url_auto_subs_non_en) ) )
+
+        if VERBOSE:
+            print "All videos: "+str(len(video_ids))
+            print "videos + manual subs: "+str(len(manual_subs))
+            print "videos + auto_subs: "+str(len(auto_subs))
+            print "videos + non english manual subs: "+str(len(manual_subs_non_en))
+            print "videos + non english auto subs: "+str(len(auto_subs_non_en))
+            print "videos + no subtitles: "+str(len(video_ids_no_auto_subs))
 
         subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
         if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3]:
@@ -252,17 +295,23 @@ def main():
             stopwords = get_stopwords( extract_langs ( original_subs ) )
             frequent_words = words_frequency( original_subs, stopwords )
             beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
+            print frequent_words
         else:
-            print "No subtitles in this channel: "+channel_name
+            print "No subtitles in this channel: " + channel_name
     except:
         if DEBUG:
             type, value, tb = sys.exc_info()
             traceback.print_exc()
-            last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
-            frame = last_frame().tb_frame
+            last_frame = tb
+            frame = last_frame.tb_frame
             ns = dict(frame.f_globals)
             ns.update(frame.f_locals)
             code.interact(local=ns)
 
 if __name__ == '__main__':
+    parser = OptionParser()
+    parser.add_option("-v", action="store_true", dest="verbose")
+    (options, args) = parser.parse_args()
+    VERBOSE = options.verbose
     main()
+    os._exit(0)
