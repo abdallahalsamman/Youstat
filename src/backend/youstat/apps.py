@@ -286,6 +286,6 @@ def main(request, args):
         english_subs = extract_english_subs(subtitles)
         stopwords = get_stopwords( extract_langs ( original_subs ) )
         frequent_words = words_frequency( original_subs, stopwords )
-        beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
+        # beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
         return HttpResponse(json.dumps(frequent_words))
-    return HttpResponse("No subtitles in this channel: " + channel_name)
+    return HttpResponse(json.dumps([["No subtitles in this channel: " + channel_name, ""]]))

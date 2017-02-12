@@ -1,9 +1,9 @@
 $('document').ready(function(){
-
     $('#btn_submit').click(function(e){
         channel_name = $('#input_channel')[0].value;
+        $("#result")[0].innerHTML = "Loading...";
         $.get({
-            'url': 'http://127.0.0.1:8000/api/channel/'+channel_name,
+            'url': '/api/channel/'+channel_name,
             success: function(data){
                 words_count = JSON.parse(data);
                 html = "<table border='1px' >";
@@ -16,5 +16,4 @@ $('document').ready(function(){
             }
         })
     })
-
 })
