@@ -1,7 +1,7 @@
-import gevent.monkey; gevent.monkey.patch_all()
 import json
 import re
 import urllib
+from urlparse import urlparse
 import requests
 import grequests
 import os
@@ -226,8 +226,7 @@ def beautify_stats(stats):
 
 def main():
     try:
-        channel_name = args[0]
-        channel = get_channel(channel_name)
+        channel = get_channel(args[0])
         items = get_playlist(channel)
         video_ids = [extract_video_id(item) for item in items if is_video(item)]
         video_ids_len = len(video_ids)

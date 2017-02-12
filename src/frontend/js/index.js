@@ -1,11 +1,12 @@
 $('document').ready(function(){
     $('#btn_submit').click(function(e){
-        channel_name = $('#input_channel')[0].value;
+        user_input = $('#input_channel')[0].value;
         $("#result")[0].innerHTML = "Loading...";
         $.get({
-            'url': '/api/channel/'+channel_name,
+            'url': '/api/'+user_input,
             success: function(data){
                 words_count = JSON.parse(data);
+                html = "<br><br>";
                 html = "<table border='1px' >";
                 words_count.forEach(function(word){
                     html += "<tr><td>" + word[0] + "</td>";

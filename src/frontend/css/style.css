@@ -29,6 +29,12 @@ body{
     width: 50px;
 }
 
+#result font{
+    width: calc(30% + 55px);
+    display: block;
+    text-align: left;
+}
+
 #result table{
     border-collapse: collapse;
     width:40%;
@@ -37,5 +43,5 @@ body{
 }
 
 #result table td{
-padding: 7px;
+    padding: 7px;
 }
