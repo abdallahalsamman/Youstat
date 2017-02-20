@@ -20,7 +20,6 @@ from django.views.generic import TemplateView
 from youstat.apps import main
 
 urlpatterns = [
-    url(r'^admin/', admin.site.urls),
     url(r'^$', TemplateView.as_view(template_name='index.html')),
     url('^api/(.*)$', main),
 ]

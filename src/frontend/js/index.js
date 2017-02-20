@@ -7,7 +7,7 @@ $('document').ready(function(){
             success: function(data){
                 words_count = JSON.parse(data);
                 html = "<br><br>";
-                html = "<table border='1px' >";
+                html += "<table border='1px' >";
                 words_count.forEach(function(word){
                     html += "<tr><td>" + word[0] + "</td>";
                     html += "<td>" + word[1] + "</td></tr>";
