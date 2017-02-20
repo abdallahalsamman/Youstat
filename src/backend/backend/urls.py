@@ -21,5 +21,5 @@ from youstat.apps import main
 
 urlpatterns = [
     url(r'^$', TemplateView.as_view(template_name='index.html')),
-    url('^api/(.*)$', main),
+    url('^api(.*)$', main),
 ]

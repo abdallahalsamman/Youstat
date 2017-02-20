@@ -37,7 +37,7 @@ s.mount('https://', b)
 
 PAGE_SIZE = 50
 
-TOP_WORDS_SIZE = 30 # the top 30 frequent words
+TOP_WORDS_SIZE = 5 # the top 30 frequent words
 STOPWORDS_FOLDER = os.path.dirname(os.path.abspath(__file__)) + "/" + "stopwords"
 
 def channel_url(kind, id):
@@ -63,13 +63,10 @@ def is_video(video):
     return ('videoId' in video['contentDetails'])
 
 def extract_original_subs(subtitles):
-    manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en = subtitles
-    return map(lambda x: x[1], manual_subs + auto_subs + manual_subs_non_en + auto_subs_non_en)
+    return map(lambda x: x[1], [i for sub in subtitles for i in sub])
 
 def extract_english_subs(subtitles):
-    manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en = subtitles
-    return map(lambda x: x[1], manual_subs + auto_subs) + \
-        map(lambda x: x[2], manual_subs_non_en + auto_subs_non_en)
+    return map(lambda x: x[2] if len(x) == 3 and x[2] else x[1], [i for sub in subtitles for i in sub])
 
 def extract_langs(subtitles):
     return list(set(map(lambda x: x[0], subtitles)))
@@ -140,6 +137,13 @@ def user_input_info(user_input):
                     return (split_path[1], split_path[2])
     else:
         return (None, None)
+
+def db_sub_to_runtime(record):
+    return (
+        record.video_id
+        , (record.subtitle_original_lang, record.subtitle_original_formatted, record.subtitle_original)
+        , ('en', record.subtitle_translated_formatted, record.subtitle_translated) if record.subtitle_translated_formatted else None
+    )
 
 def make_manual_sub(video_id, manual_subs_page):
     if manual_subs_page:
@@ -226,7 +230,7 @@ def words_frequency(subtitles, stopwords):
         return words
 
     words = process_subs(subtitles)
-    return sort_words_by_freq(words)[0:TOP_WORDS_SIZE]
+    return sort_words_by_freq(words)[0:100]
 
 def get_stopwords_lang(lang):
     def stopwords_file():
@@ -252,21 +256,28 @@ def beautify_stats(stats):
     return map(beautify_category, stats['document_tone']['tone_categories'])
 
 def main(request, args):
-    user_input_kind, user_input_id = user_input_info(args+(("?"+request.META['QUERY_STRING']) if request.META['QUERY_STRING'] else ""))
+    user_input_kind, user_input_id = user_input_info(urllib.unquote(request.GET['url']))
+    accurate = 'accurate' in request.GET and request.GET['accurate'].lower() == "true"
     if user_input_kind and user_input_id:
         if user_input_kind in ['channel', 'user']:
             channel = get_channel(user_input_kind, user_input_id)
             channel_id = extract_channel_id(channel)
             channel_db = Channels.objects.filter(channel_id=channel_id)
-            if channel_db.exists():
-                return HttpResponse(json.dumps(channel_db[0].words_count))
+            if channel_db.exists() and not accurate:
+                return HttpResponse(json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE]))
             items = get_playlist(channel)
-            video_ids = [extract_video_id(item) for item in items if is_video(item)]
+            channel_video_ids = [extract_video_id(item) for item in items if is_video(item)]
+            video_ids = [video_id for video_id in channel_video_ids if not Videos.objects.filter(video_id=video_id).exists()]
+            video_ids_in_db = list(set(channel_video_ids)^set(video_ids))
         elif user_input_kind == 'video':
             video_db = Videos.objects.filter(video_id=user_input_id)
-            if video_db.exists():
-                return HttpResponse(json.dumps(video_db[0].words_count))
+            if video_db.exists() and not accurate:
+                return HttpResponse(json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE]))
             video_ids = [user_input_id]
+
+        subtitles_from_db = [
+            db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db]
+
         video_ids_len = len(video_ids)
         manual_sub_langs = grequests.map(
             [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids) ])
@@ -325,8 +336,8 @@ def main(request, args):
                     and (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
             ] for cat_ind, sub_cat in enumerate( (url_manual_subs_non_en, url_auto_subs_non_en) ) )
 
-        subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en)
-        if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3]:
+        subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en, subtitles_from_db)
+        if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3] or subtitles[4]:
             original_subs = extract_original_subs(subtitles)
             english_subs = extract_english_subs(subtitles)
             subs_pages = manual_subs_pages + auto_subs_pages + manual_subs_non_en_pages + auto_subs_non_en_pages
@@ -334,28 +345,40 @@ def main(request, args):
             stopwords = get_stopwords( extract_langs ( original_subs ) )
             frequent_words = words_frequency( original_subs, stopwords )
             if user_input_kind in ['channel', 'user']:
-                Channels.objects.create(channel_id=channel_id, video_ids=video_ids, words_count=frequent_words)
+                Channels.objects.update_or_create(
+                    channel_id=channel_id
+                    , defaults={
+                        'video_ids': video_ids_in_db + video_ids
+                        , 'words_count': frequent_words
+                    }
+                )
                 for sub_category in subtitles:
                     for sub in sub_category:
-                        Videos.objects.create(
+                        Videos.objects.update_or_create(
                             video_id=sub[0]
-                            , subtitle_original=sub[1][2]
-                            , subtitle_original_formatted=sub[1][1]
-                            , subtitle_original_lang=sub[1][0]
-                            , subtitle_translated=sub[2][2] if len(sub) == 3 else ''
-                            , subtitle_translated_formatted=sub[2][1] if len(sub) == 3 else ''
-                            , words_count=words_frequency( [sub[1]], stopwords ))
+                            , defaults={
+                                'subtitle_original': sub[1][2]
+                                , 'subtitle_original_formatted': sub[1][1]
+                                , 'subtitle_original_lang': sub[1][0]
+                                , 'subtitle_translated': sub[2][2] if len(sub) == 3 and sub[2] else ''
+                                , 'subtitle_translated_formatted': sub[2][1] if len(sub) == 3 and sub[2] else ''
+                                , 'words_count': words_frequency( [sub[1]], stopwords )
+                            }
+                        )
             elif user_input_kind == 'video':
-                Videos.objects.create(
+                Videos.objects.update_or_create(
                     video_id=video_ids[0]
-                    , subtitle_original=subs_pages[0].text if subs_pages else ''
-                    , subtitle_original_formatted=original_subs[0][1]
-                    , subtitle_original_lang=original_subs[0][0]
-                    , subtitle_translated=translated_subs_pages[0].text if translated_subs_pages else ''
-                    , subtitle_translated_formatted=format_subtitles(translated_subs_pages[0].text) if translated_subs_pages else ''
-                    , words_count=frequent_words)
+                    , defaults={
+                        'subtitle_original': subs_pages[0].text if subs_pages else ''
+                        , 'subtitle_original_formatted': original_subs[0][1]
+                        , 'subtitle_original_lang': original_subs[0][0]
+                        , 'subtitle_translated': translated_subs_pages[0].text if translated_subs_pages else ''
+                        , 'subtitle_translated_formatted': format_subtitles(translated_subs_pages[0].text) if translated_subs_pages else ''
+                        , 'words_count': frequent_words
+                    }
+                )
             # beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
-            return HttpResponse(json.dumps(frequent_words))
+            return HttpResponse(json.dumps(frequent_words[0:TOP_WORDS_SIZE]))
         return HttpResponse(json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]]))
     else:
         return HttpResponse(json.dumps([["Please input a youtube channel/video url", ""]]))
