@@ -41,7 +41,7 @@ TOP_WORDS_SIZE = 5 # the top 30 frequent words
 STOPWORDS_FOLDER = os.path.dirname(os.path.abspath(__file__)) + "/" + "stopwords"
 
 def channel_url(kind, id):
-    return "https://www.googleapis.com/youtube/v3/channels?part=contentDetails&"+("forUsername" if kind == "user" else "id")+"="+id+"&key="+API_KEY
+    return "https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&"+("forUsername" if kind == "user" else "id")+"="+id+"&key="+API_KEY
 
 def get_channel(kind, id):
     return get_json(channel_url(kind, id))
@@ -55,6 +55,9 @@ def uploads_id(channel):
 
 def extract_channel_id(channel):
     return channel['items'][0]['id']
+
+def extract_channel_name(channel):
+    return channel['items'][0]['snippet']['title']
 
 def extract_video_id(video):
     return video['contentDetails']['videoId']
@@ -255,9 +258,9 @@ def beautify_stats(stats):
         return { 'category_name': category['category_name'], 'tones': tones }
     return map(beautify_category, stats['document_tone']['tone_categories'])
 
-def main(request, args):
-    user_input_kind, user_input_id = user_input_info(urllib.unquote(request.GET['url']))
-    accurate = 'accurate' in request.GET and request.GET['accurate'].lower() == "true"
+def start(data):
+    user_input_kind, user_input_id = user_input_info(urllib.unquote(data['url']))
+    accurate = 'accurate' in data and data['accurate'].lower() == "true"
     if user_input_kind and user_input_id:
         if user_input_kind in ['channel', 'user']:
             channel = get_channel(user_input_kind, user_input_id)
@@ -382,3 +385,6 @@ def main(request, args):
         return HttpResponse(json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]]))
     else:
         return HttpResponse(json.dumps([["Please input a youtube channel/video url", ""]]))
+
+def main(request, args):
+    start(request.GET)

@@ -1,6 +1,12 @@
 *.sqlite3
 static
 *.pyc
+.idea
 .coverage
 .envrc
 elm-stuff
+*.mp4
+*.ts
+*.jpg
+*.png
+*.jpeg
