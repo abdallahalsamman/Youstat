@@ -2,7 +2,7 @@
 import django
 django.setup()
 
-import sys, os
+import sys, re, os
 from youstat.models import Channels, Videos
 from youstat import apps
 from bs4 import BeautifulSoup
@@ -33,7 +33,7 @@ for video_id in CHANNEL.video_ids:
 for video_with_subtitles in videos_with_subtitles:
 	if SEARCH_WORD in video_with_subtitles[1]:
 		soup = BeautifulSoup(video_with_subtitles[1], 'html.parser')
-		timing = map(lambda x: (x.get('dur'), x.get('start'), x.string), filter(lambda x: SEARCH_WORD in x.string, soup.find_all('text')))
+		timing = map(lambda x: (x.get('dur'), x.get('start'), x.string), filter(lambda x: re.findall(r'\b'+SEARCH_WORD+r'\b', x.string), soup.find_all('text')))
 		if timing:
 			timings.append((video_with_subtitles[0], timing))
 
@@ -45,8 +45,8 @@ for timing in timings:
 		print "ffmpeg -n -ss "+str(float(time[1]))+" -i $(youtube-dl -f mp4 --get-url "+"https://www.youtube.com/watch?v=" + timing[0]+") -t "+str(float(time[0]))+" " + FOLDER + timing[0]+"_"+str(occurence)+".mp4;"
 		files.append(FOLDER + timing[0]+"_"+str(occurence)+".mp4")
 		occurence += 1
-print ';'.join(['ffmpeg -i '+file+' -map 0 -c copy -f mpegts '+file+'.ts' for file in files])
-print 'ffmpeg -i "concat:'+'|'.join([file+'.ts' for file in files])+'" -c copy -absf aac_adtstoasc '+FOLDER+'output.mp4'
+print "python -c \"import os; print ';'.join(['ffmpeg -i "+FOLDER+"'+file+' -map 0 -n -c copy -f mpegts "+FOLDER+"'+file+'.ts' for file in os.listdir('"+FOLDER+"') if file.split('.')[-1] == 'mp4'])\" | sh"
+print 'ffmpeg -y -i "concat:$(perl -e \'print join("|", @ARGV);\' '+FOLDER+'*.ts)" -c copy -absf aac_adtstoasc '+FOLDER+'output.mp4'
 print "python video_bot/get_youtuber_img.py "+channel_username
 print "python video_bot/add_text_to_thumbnail.py Pictures/"+channel_username+"/ "+SEARCH_WORD+"!"
 print "echo "+FOLDER

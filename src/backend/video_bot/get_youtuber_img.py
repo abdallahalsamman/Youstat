@@ -17,7 +17,7 @@ query='+'.join(query)
 url="https://www.google.co.in/search?q="+query+"&source=lnms&tbm=isch"
 
 #add the directory for your image here
-DIR="Pictures"
+DIR="Pictures/"
 if not os.path.exists(DIR):
             os.mkdir(DIR)
 
@@ -25,9 +25,6 @@ DIR = os.path.join(DIR, query.split()[0])
 
 if not os.path.exists(DIR):
             os.mkdir(DIR)
-else:
-    sys.exit()
-
 print url
 
 header={'User-Agent':"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36"
@@ -45,13 +42,14 @@ print  "there are total" , len(ActualImages),"images"
 
 ###print images
 for i , (img , Type) in enumerate( ActualImages):
-    if cntr == 20:
-        break
     try:
+        cntr = len(os.listdir(DIR)) + 1
+        if cntr >= 20:
+            break
         req = urllib2.Request(img, headers={'User-Agent' : header})
         raw_img = urllib2.urlopen(req, timeout=4).read()
 
-        cntr = len(os.listdir(DIR)) + 1
+
         print cntr
         if len(Type)==0:
             f = open(os.path.join(DIR , str(cntr)+".jpg"), 'wb')
