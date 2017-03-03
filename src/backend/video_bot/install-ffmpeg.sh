@@ -1,3 +1,6 @@
+# only for ubuntu; ok if it fails on mac
+sudo apt-get install build-essential openssl libssl-dev
+
 git clone git://git.videolan.org/x264.git
 git clone git://source.ffmpeg.org/ffmpeg.git
 cd x264
@@ -5,6 +8,8 @@ cd x264
 make -j8
 sudo make install
 cd ../ffmpeg
-./configure --enable-gpl --enable-nonfree --enable-pthreads --enable-libx264
+./configure --enable-openssl --enable-gpl --enable-nonfree --enable-pthreads --enable-libx264
 make -j8
 sudo make install
+wget https://github.com/tokland/youtube-upload/archive/master.zip
+unzip master.zip

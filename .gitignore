@@ -1,4 +1,6 @@
 *.sqlite3
+youtube-upload-master
+master.zip
 static
 *.pyc
 .idea
