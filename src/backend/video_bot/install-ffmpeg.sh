@@ -13,3 +13,4 @@ make -j8
 sudo make install
 wget https://github.com/tokland/youtube-upload/archive/master.zip
 unzip master.zip
+cp client_secret.json youtube-upload-master

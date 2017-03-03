@@ -41,12 +41,12 @@ for video_with_subtitles in videos_with_subtitles:
         if timing:
             timings.append((video_with_subtitles[0], timing))
 
-print "mkdir -p " + FOLDER + ';'
 duration = 0
 part = 1
+print "mkdir -p " + FOLDER + '/part'+str(part)+';'
 for timing in timings:
     occurence = 0
-    if duration >= (60 * 1):
+    if duration >= (60 * 4):
         duration = 0
         part += 1
         print "mkdir -p " + FOLDER + '/part'+str(part)+';'
@@ -57,23 +57,23 @@ for timing in timings:
         print "ffmpeg -n -ss "+str(float(time[1]))+" -i $(youtube-dl -f mp4 --get-url "+"https://www.youtube.com/watch?v=" + timing[0]+") -t "+str(float(time[0]))+" " + FOLDER + "part" + str(part) + "/" + timing[0]+"_"+str(occurence)+".mp4;"
         occurence += 1
 
-partsExist = ' - Part `echo $part | sed \'s/[^0-9]//\'`' if part > 1 else ''
-print "python -c \"[';'.join(['ffmpeg -i '+folder+file+' -map 0 -n -c copy -f mpegts '+folder+file+'.ts' for file in os.listdir(folder) if file.split('.')[-1] == 'mp4']) for folder in os.listdir('"+FOLDER+"') if os.path.isdir(folder)]\" | sh"
+partsExist = ' - Part `echo $part | sed \'s/[^0-9]//g\'`' if part > 1 else ''
+print "python -c \"import os; print ''.join([';'.join(['ffmpeg -i "+FOLDER+"'+folder+'/'+file+' -map 0 -n -c copy -f mpegts "+FOLDER+"'+folder+'/'+file+'.ts' for file in os.listdir('"+FOLDER+"'+folder) if file.split('.')[-1] == 'mp4']) for folder in os.listdir('"+FOLDER+"') if os.path.isdir('"+FOLDER+"'+folder)])\" | sh"
 print 'for FOLDER in `ls -d1 '+FOLDER+'*/`; do ffmpeg -y -i "concat:$(perl -e \'print join("|", @ARGV);\' $FOLDER*.ts)" -c copy -absf aac_adtstoasc $FOLDER/output.mp4; done;'
 print "python video_bot/get_youtuber_img.py "+channel_username
 print "python video_bot/add_text_to_thumbnail.py Pictures/"+channel_username+"/ "+SEARCH_WORD+"!"
 print '\
 for part in `ls -d1 '+FOLDER+'/*/ | xargs -n 1 basename`; do \
-PYTHONPATH=youtube-upload-master \
-python youtube-upload-master/bin/youtube-upload \
---client-secrets=client_secret.json \
---title="'+channel_username+' saying '+SEARCH_WORD+partsExist+'" \
---description="This is ' + channel_username + ' saying '+SEARCH_WORD+' compilation\
+PYTHONPATH=./video_bot/youtube-upload-master \
+python video_bot/youtube-upload-master/bin/youtube-upload \
+--client-secrets=video_bot/client_secret.json \
+--title="'+channel_username.capitalize()+' saying '+SEARCH_WORD+partsExist+'" \
+--description="This is ' + channel_username.lower() + ' saying '+SEARCH_WORD+' compilation\
 \\n\\nWhich youtuber would you like to see next, and saying which word?" \
 --category=Entertainment \
 --tags="'+channel_username.lower()+',evexo,youtubers saying,evex o,WORDS ON YOUTUBERS,'+channel_username.lower()+' saying '+SEARCH_WORD+', saying '+SEARCH_WORD+'" \
 --default-language="en" \
---playlist "'+channel_username+'" \
+--playlist "'+channel_username.lower()+'" \
 --privacy unlisted \
 '+FOLDER+'/$part/output.mp4;\
 done;'

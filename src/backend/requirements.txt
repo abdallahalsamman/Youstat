@@ -2,5 +2,10 @@ Django==1.9.7
 gevent==1.2.1
 grequests==0.3.0
 requests==2.5.0
-Pillow==4.0.0
+# pillow doesn't get installed on ubuntu with pip
+# instead with ubuntu use apt-get install python-imaging
+# please comment the line below if you're on ubuntu
+# Pillow==4.0.0
 beautifulsoup4==4.5.3
+progressbar2==3.12.0
+google_api_python_client==1.6.2
