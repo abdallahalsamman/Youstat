@@ -5,7 +5,6 @@ static
 *.pyc
 .idea
 .coverage
-.envrc
 elm-stuff
 *.mp4
 *.ts
