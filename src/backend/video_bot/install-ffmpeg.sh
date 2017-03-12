@@ -1,5 +1,4 @@
-# only for ubuntu; ok if it fails on mac
-sudo apt-get install build-essential openssl libssl-dev
+sudo apt-get -y install build-essential openssl libssl-dev yasm unzip
 
 git clone git://git.videolan.org/x264.git
 git clone git://source.ffmpeg.org/ffmpeg.git
@@ -13,4 +12,3 @@ make -j8
 sudo make install
 wget https://github.com/tokland/youtube-upload/archive/master.zip
 unzip master.zip
-cp client_secret.json youtube-upload-master
