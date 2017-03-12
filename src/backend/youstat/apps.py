@@ -387,4 +387,4 @@ def start(data):
         return HttpResponse(json.dumps([["Please input a youtube channel/video url", ""]]))
 
 def main(request, args):
-    start(request.GET)
+    return start(request.GET)

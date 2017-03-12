@@ -2,79 +2,145 @@
 import django
 django.setup()
 
-import sys, re, os
+import sys, re, os, subprocess
 from youstat.models import Channels, Videos
 from youstat import apps
 from bs4 import BeautifulSoup
+from progress.bar import Bar
 
-SEARCH_WORD = sys.argv[2]
-URL = sys.argv[1]
+
+PART_LENGTH = 3.5 # in min
 
 def find(name, path):
     for root, dirs, files in os.walk(path):
         if name in files:
             return os.path.join(root, name)
 
-user_input_kind, user_input_id = apps.user_input_info(URL)
-if user_input_kind and user_input_id:
+def listdir_fullpath(d):
+    return [os.path.join(d, f) for f in os.listdir(d)]
+
+def extract_search_occurence_duration(video_w_subs):
+    return map(
+        lambda x: (x.get('dur'), x.get('start'), x.string),
+        filter(
+            lambda x: re.findall(r'\b'+SEARCH_WORD+r'\b', x.string),
+            BeautifulSoup(video_w_subs[1], 'html.parser').find_all('text')))
+
+def make_part_folder_path(output_folder, part):
+    return os.path.abspath( os.path.join(output_folder, "part" + str(part)) )
+
+def make_mp4_to_ts_conv_cmd(mp4file):
+    return '/usr/local/bin/ffmpeg -i '+mp4file+' -map 0 -n -c copy -f mpegts '+mp4file+'.ts'
+
+def make_mp4_to_ts_conv_cmds(part_dir_path):
+    return [
+        make_mp4_to_ts_conv_cmd(mp4file)
+            for mp4file in listdir_fullpath( part_dir_path )
+            if mp4file.split('.')[-1] == 'mp4' and os.path.isdir( part_dir_path )
+    ]
+
+def make_ffmpeg_download_part_cmd(part_video):
+    return "/usr/local/bin/ffmpeg -n -ss " +part_video[1] + \
+    " -i $(/usr/local/bin/youtube-dl -f mp4 --get-url https://www.youtube.com/watch?v=" + part_video[0]+")" + \
+    " -t "+ str(float(part_video[2])) + " " + part_video[5] if not os.path.exists(part_video[5]) else ''
+
+def make_ffmpeg_download_part_cmds(part_videos):
+    return [
+        cmd for video in part_videos for cmd in [make_ffmpeg_download_part_cmd(video)] if cmd
+    ]
+
+def make_concat_videos_cmd(part_dir_path):
+    return "ffmpeg -y -i 'concat:" + \
+        '|'.join([tsfile for tsfile in os.listdir( part_dir_path ) if tsfile.split('.')[-1] == 'ts']) + \
+        "' -c copy -absf aac_adtstoasc output.mp4"
+
+def make_upload_to_youtube_cmd(part, channel_username, part_dir_path):
+    part_str = ' - Part '+str(part) if part > 1 else ''
+    return 'PYTHONPATH=./video_bot/youtube-upload-master ' + \
+        'python ./video_bot/youtube-upload-master/bin/youtube-upload ' + \
+        '--client-secrets=./video_bot/client_secret.json ' + \
+        '--title="'+channel_username.upper()+' All "'+SEARCH_WORD.capitalize() + '\!" Moments"' +part_str+' ' + \
+        '--description="Which youtuber would you like to see next, and saying which word?" ' + \
+        '--category=Entertainment ' + \
+        '--tags="'+channel_username.lower()+',evexo,youtubers saying,evex o,WORDS ON YOUTUBERS,'+channel_username.lower()+' saying '+SEARCH_WORD+', saying '+SEARCH_WORD+'" ' + \
+        '--default-language="en" ' + \
+        '--playlist "'+channel_username.lower()+'" ' + \
+        '--privacy public ' + \
+        os.path.join(part_dir_path, 'output.mp4')
+
+def main(SEARCH_WORD, URL):
+    user_input_kind, user_input_id = apps.user_input_info(URL)
+    if user_input_kind and user_input_id:
         if user_input_kind in ['channel', 'user']:
             channel = apps.get_channel(user_input_kind, user_input_id)
-channel_username = "".join(x for x in apps.extract_channel_name(channel) if x.isalnum())
-CHANNEL_ID = apps.extract_channel_id(channel)
-apps.start({'url': URL, 'accurate': 'false'})
+            channel_username = "".join(x for x in apps.extract_channel_name(channel) if x.isalnum())
+            CHANNEL_ID = apps.extract_channel_id(channel)
+            CHANNEL_DB = Channels.objects.get(channel_id=CHANNEL_ID)
+            apps.start({'url': URL, 'accurate': 'false'})
+
+    output_folder =  os.path.abspath( os.path.join( "video_bot", channel_username, SEARCH_WORD.strip() ) )
+
+    videos_w_subs = [
+        ( video_id, video[0].subtitle_original )
+        for video_id in CHANNEL_DB.video_ids for video in [Videos.objects.filter(video_id=video_id)] if video.exists() ]
+
+    occurences = [
+        tuple((video_w_subs[0], occur) for occur in [extract_search_occurence_duration(video_w_subs)] if occur)[0]
+        for video_w_subs in videos_w_subs
+        if SEARCH_WORD in video_w_subs[1]
+     ]
 
 
-CHANNEL = Channels.objects.get(channel_id=CHANNEL_ID)
-FOLDER =  "video_bot/"+ channel_username + '/' + SEARCH_WORD.strip() +  "/"
-videos_with_subtitles = []
-timings = []
+    duration = 0
+    parts_videos = []
+    for vid_occurences in occurences:
+        for occur_index, occur in enumerate(vid_occurences[1]):
+            duration += float(occur[0])
+            part = int(duration / (PART_LENGTH * 60)) + 1 # min part is 1
+            parts_videos.append((
+                vid_occurences[0]
+                , occur[1]
+                , occur[0]
+                , occur_index
+                , part
+                , os.path.abspath( os.path.join(
+                    output_folder
+                    , "part" + str(part)
+                    , vid_occurences[0]+"_"+str(occur_index)+".mp4" )
+                )
+            ))
 
-for video_id in CHANNEL.video_ids:
-    video = Videos.objects.filter(video_id=video_id)
-    if video.exists():
-        videos_with_subtitles.append((video_id, video[0].subtitle_original))
+    FNULL = open(os.devnull, 'w')
+    parts = range(1, part+1)
+    for part in parts:
+        part_videos = [video for video in parts_videos if video[4] == part]
 
-for video_with_subtitles in videos_with_subtitles:
-    if SEARCH_WORD in video_with_subtitles[1]:
-        soup = BeautifulSoup(video_with_subtitles[1], 'html.parser')
-        timing = map(lambda x: (x.get('dur'), x.get('start'), x.string), filter(lambda x: re.findall(r'\b'+SEARCH_WORD+r'\b', x.string), soup.find_all('text')))
-        if timing:
-            timings.append((video_with_subtitles[0], timing))
+        part_dir_path = make_part_folder_path( output_folder, part )
+        os.makedirs( part_dir_path ) if not os.path.exists( part_dir_path ) else ''
 
-duration = 0
-part = 1
-print "mkdir -p " + FOLDER + '/part'+str(part)+';'
-for timing in timings:
-    occurence = 0
-    if duration >= (60 * 4):
-        duration = 0
-        part += 1
-        print "mkdir -p " + FOLDER + '/part'+str(part)+';'
-    for time in timing[1]:
-        duration += float(time[0])
-        if find(timing[0]+"_"+str(occurence)+".mp4", FOLDER):
-            continue
-        print "ffmpeg -n -ss "+str(float(time[1]))+" -i $(youtube-dl -f mp4 --get-url "+"https://www.youtube.com/watch?v=" + timing[0]+") -t "+str(float(time[0]))+" " + FOLDER + "part" + str(part) + "/" + timing[0]+"_"+str(occurence)+".mp4;"
-        occurence += 1
+        dl_cmds = make_ffmpeg_download_part_cmds(part_videos)
+        dl_part_videos_count = len(dl_cmds)
+        bar = Bar('Part %d: Downloading videos' % (part), max=dl_part_videos_count)
+        for i, cmd in enumerate(dl_cmds):
+            subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+            bar.next()
+        bar.finish()
 
-partsExist = ' - Part `echo $part | sed \'s/[^0-9]//g\'`' if part > 1 else ''
-print "python -c \"import os; print ''.join([';'.join(['ffmpeg -i "+FOLDER+"'+folder+'/'+file+' -map 0 -n -c copy -f mpegts "+FOLDER+"'+folder+'/'+file+'.ts' for file in os.listdir('"+FOLDER+"'+folder) if file.split('.')[-1] == 'mp4']) for folder in os.listdir('"+FOLDER+"') if os.path.isdir('"+FOLDER+"'+folder)])\" | sh"
-print 'for FOLDER in `ls -d1 '+FOLDER+'*/`; do ffmpeg -y -i "concat:$(perl -e \'print join("|", @ARGV);\' $FOLDER*.ts)" -c copy -absf aac_adtstoasc $FOLDER/output.mp4; done;'
-print "python video_bot/get_youtuber_img.py "+channel_username
-print "python video_bot/add_text_to_thumbnail.py Pictures/"+channel_username+"/ "+SEARCH_WORD+"!"
-print '\
-for part in `ls -d1 '+FOLDER+'/*/ | xargs -n 1 basename`; do \
-PYTHONPATH=./video_bot/youtube-upload-master \
-python video_bot/youtube-upload-master/bin/youtube-upload \
---client-secrets=video_bot/client_secret.json \
---title="'+channel_username.capitalize()+' saying '+SEARCH_WORD+partsExist+'" \
---description="This is ' + channel_username.lower() + ' saying '+SEARCH_WORD+' compilation\
-\\n\\nWhich youtuber would you like to see next, and saying which word?" \
---category=Entertainment \
---tags="'+channel_username.lower()+',evexo,youtubers saying,evex o,WORDS ON YOUTUBERS,'+channel_username.lower()+' saying '+SEARCH_WORD+', saying '+SEARCH_WORD+'" \
---default-language="en" \
---playlist "'+channel_username.lower()+'" \
---privacy unlisted \
-'+FOLDER+'/$part/output.mp4;\
-done;'
-print "echo "+FOLDER
+        conv_cmds = make_mp4_to_ts_conv_cmds(part_dir_path)
+        part_videos_count = len(conv_cmds)
+        bar = Bar("Part %d: Converting video(mp4 -> ts)" % (part), max=part_videos_count)
+        for i, cmd in enumerate(conv_cmds):
+            subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+            bar.next()
+        bar.finish()
+
+        print "Part %d: Merging %d videos" % (part, part_videos_count)
+        subprocess.call( make_concat_videos_cmd(part_dir_path), cwd=part_dir_path, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+
+        print "Part %d: Uploading to youtube" % (part)
+        subprocess.call( make_upload_to_youtube_cmd(part, channel_username, part_dir_path), stdout=FNULL, stderr=subprocess.STDOUT, shell=True)
+
+if __name__ == "__main__":
+    SEARCH_WORD = sys.argv[2]
+    URL = sys.argv[1]
+    main(SEARCH_WORD, URL)
