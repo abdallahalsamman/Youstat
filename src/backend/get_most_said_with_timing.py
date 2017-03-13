@@ -24,7 +24,7 @@ def extract_search_occurence_duration(video_w_subs):
         lambda x: (x.get('dur'), x.get('start'), x.string),
         filter(
             lambda x: re.findall(r'\b'+SEARCH_WORD+r'\b', x.string),
-            BeautifulSoup(video_w_subs[1], 'html.parser').find_all('text')))
+            BeautifulSoup(video_w_subs[1], 'html.parser').find_all('text')) )
 
 def make_part_folder_path(output_folder, part):
     return os.path.abspath( os.path.join(output_folder, "part" + str(part)) )
@@ -75,8 +75,8 @@ def main(SEARCH_WORD, URL):
             channel = apps.get_channel(user_input_kind, user_input_id)
             channel_username = "".join(x for x in apps.extract_channel_name(channel) if x.isalnum())
             CHANNEL_ID = apps.extract_channel_id(channel)
-            CHANNEL_DB = Channels.objects.get(channel_id=CHANNEL_ID)
             apps.start({'url': URL, 'accurate': 'false'})
+            CHANNEL_DB = Channels.objects.get(channel_id=CHANNEL_ID)
 
     output_folder =  os.path.abspath( os.path.join( "video_bot", channel_username, SEARCH_WORD.strip() ) )
 
@@ -84,13 +84,13 @@ def main(SEARCH_WORD, URL):
         ( video_id, video[0].subtitle_original )
         for video_id in CHANNEL_DB.video_ids for video in [Videos.objects.filter(video_id=video_id)] if video.exists() ]
 
-    occurences = [
-        tuple((video_w_subs[0], occur) for occur in [extract_search_occurence_duration(video_w_subs)] if occur)[0]
-        for video_w_subs in videos_w_subs
-        if SEARCH_WORD in video_w_subs[1]
-     ]
-
-
+    occurences = []
+    for video_w_subs in videos_w_subs:
+        if SEARCH_WORD in video_w_subs[1]:
+            occurs = extract_search_occurence_duration(video_w_subs) 
+            if occurs:
+                occurences.append((video_w_subs[0], occurs))
+       
     duration = 0
     parts_videos = []
     for vid_occurences in occurences:

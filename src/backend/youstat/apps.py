@@ -283,14 +283,14 @@ def start(data):
 
         video_ids_len = len(video_ids)
         manual_sub_langs = grequests.map(
-            [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids) ])
+            [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids) ], size=50)
 
         url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
             split_results([make_manual_sub(video_id, manual_sub_langs[index].text) for index, video_id in enumerate(video_ids) if manual_sub_langs[index]]) )
 
         video_ids_no_manual_subs_len = len(video_ids_no_manual_subs)
         videos_pages = grequests.map(
-            [ get_video_page(i, index, video_ids_no_manual_subs_len) for index, i in enumerate(video_ids_no_manual_subs) ] )
+            [ get_video_page(i, index, video_ids_no_manual_subs_len) for index, i in enumerate(video_ids_no_manual_subs) ], size=50)
 
         url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
             split_results([make_auto_sub(video_id, videos_pages[index].text) for index, video_id in enumerate(video_ids_no_manual_subs) if videos_pages[index] ]) )
@@ -298,9 +298,9 @@ def start(data):
         url_manual_subs_len = len(url_manual_subs)
         url_auto_subs_len = len(url_auto_subs)
         manual_subs_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_manual_subs_len) for index, sub in enumerate(url_manual_subs) ] )
+            [ greq_get_text(sub[1][1], index, url_manual_subs_len) for index, sub in enumerate(url_manual_subs) ], size=50)
         auto_subs_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_auto_subs_len) for index, sub in enumerate(url_auto_subs) ] )
+            [ greq_get_text(sub[1][1], index, url_auto_subs_len) for index, sub in enumerate(url_auto_subs) ], size=50)
 
         manual_subs, auto_subs = tuple(
             [ ( sub[0]
@@ -316,13 +316,13 @@ def start(data):
         url_auto_subs_non_en_len = len(url_auto_subs_non_en)
 
         manual_subs_non_en_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ] )
+            [ greq_get_text(sub[1][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
         manual_subs_non_en_trans_pages = grequests.map(
-            [ greq_get_text(sub[2][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ] )
+            [ greq_get_text(sub[2][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
         auto_subs_non_en_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ] )
+            [ greq_get_text(sub[1][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
         auto_subs_non_en_trans_pages = grequests.map(
-            [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ] )
+            [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
 
         manual_subs_non_en, auto_subs_non_en = tuple(
             [
