@@ -2,7 +2,7 @@
 import django
 django.setup()
 
-import sys, re, os, subprocess
+import sys, re, os, subprocess, shutil
 from youstat.models import Channels, Videos
 from youstat import apps
 from bs4 import BeautifulSoup
@@ -59,7 +59,7 @@ def make_upload_to_youtube_cmd(part, channel_username, part_dir_path):
     return 'PYTHONPATH=./video_bot/youtube-upload-master ' + \
         'python ./video_bot/youtube-upload-master/bin/youtube-upload ' + \
         '--client-secrets=./video_bot/client_secret.json ' + \
-        '--title="'+channel_username.upper()+' All "'+SEARCH_WORD.capitalize() + '\!" Moments"' +part_str+' ' + \
+        '--title="'+channel_username.upper()+' All "'+SEARCH_WORD.capitalize() + '\!" Moments' +part_str+'" ' + \
         '--description="Which youtuber would you like to see next, and saying which word?" ' + \
         '--category=Entertainment ' + \
         '--tags="'+channel_username.lower()+',evexo,youtubers saying,evex o,WORDS ON YOUTUBERS,'+channel_username.lower()+' saying '+SEARCH_WORD+', saying '+SEARCH_WORD+'" ' + \
@@ -79,36 +79,40 @@ def main(SEARCH_WORD, URL):
             CHANNEL_DB = Channels.objects.get(channel_id=CHANNEL_ID)
 
     output_folder =  os.path.abspath( os.path.join( "video_bot", channel_username, SEARCH_WORD.strip() ) )
+    video_ids_chunks = apps.split_array(CHANNEL_DB.video_ids, 20)
+    video_ids_chunks_len = len(video_ids_chunks)
 
-    videos_w_subs = [
-        ( video_id, video[0].subtitle_original )
-        for video_id in CHANNEL_DB.video_ids for video in [Videos.objects.filter(video_id=video_id)] if video.exists() ]
-
-    occurences = []
-    for video_w_subs in videos_w_subs:
-        if SEARCH_WORD in video_w_subs[1]:
-            occurs = extract_search_occurence_duration(video_w_subs) 
-            if occurs:
-                occurences.append((video_w_subs[0], occurs))
-       
     duration = 0
     parts_videos = []
-    for vid_occurences in occurences:
-        for occur_index, occur in enumerate(vid_occurences[1]):
-            duration += float(occur[0])
-            part = int(duration / (PART_LENGTH * 60)) + 1 # min part is 1
-            parts_videos.append((
-                vid_occurences[0]
-                , occur[1]
-                , occur[0]
-                , occur_index
-                , part
-                , os.path.abspath( os.path.join(
-                    output_folder
-                    , "part" + str(part)
-                    , vid_occurences[0]+"_"+str(occur_index)+".mp4" )
-                )
-            ))
+    for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
+        print 'BOT: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
+        videos_w_subs = [
+            ( video_id, video[0].subtitle_original )
+            for video_id in video_ids_chunk for video in [Videos.objects.filter(video_id=video_id)] if video.exists() ]
+
+        occurences = []
+        for video_w_subs in videos_w_subs:
+            if SEARCH_WORD in video_w_subs[1]:
+                occurs = extract_search_occurence_duration(video_w_subs)
+                if occurs:
+                    occurences.append((video_w_subs[0], occurs))
+
+        for vid_occurences in occurences:
+            for occur_index, occur in enumerate(vid_occurences[1]):
+                duration += float(occur[0])
+                part = int(duration / (PART_LENGTH * 60)) + 1 # min part is 1
+                parts_videos.append((
+                    vid_occurences[0]
+                    , occur[1]
+                    , occur[0]
+                    , occur_index
+                    , part
+                    , os.path.abspath( os.path.join(
+                        output_folder
+                        , "part" + str(part)
+                        , vid_occurences[0]+"_"+str(occur_index)+".mp4" )
+                    )
+                ))
 
     FNULL = open(os.devnull, 'w')
     parts = range(1, part+1)
@@ -120,7 +124,7 @@ def main(SEARCH_WORD, URL):
 
         dl_cmds = make_ffmpeg_download_part_cmds(part_videos)
         dl_part_videos_count = len(dl_cmds)
-        bar = Bar('Part %d: Downloading videos' % (part), max=dl_part_videos_count)
+        bar = Bar('Part %d/%d: Downloading videos' % (part, parts[-1]), max=dl_part_videos_count)
         for i, cmd in enumerate(dl_cmds):
             subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
             bar.next()
@@ -128,18 +132,18 @@ def main(SEARCH_WORD, URL):
 
         conv_cmds = make_mp4_to_ts_conv_cmds(part_dir_path)
         part_videos_count = len(conv_cmds)
-        bar = Bar("Part %d: Converting video(mp4 -> ts)" % (part), max=part_videos_count)
+        bar = Bar("Part %d/%d: Converting video(mp4 -> ts)" % (part, parts[-1]), max=part_videos_count)
         for i, cmd in enumerate(conv_cmds):
             subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
             bar.next()
         bar.finish()
 
-        print "Part %d: Merging %d videos" % (part, part_videos_count)
+        print "Part %d/%d: Merging %d videos" % (part, parts[-1], part_videos_count)
         subprocess.call( make_concat_videos_cmd(part_dir_path), cwd=part_dir_path, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
 
-        print "Part %d: Uploading to youtube" % (part)
+        print "Part %d/%d: Uploading to youtube" % (part, parts[-1])
         subprocess.call( make_upload_to_youtube_cmd(part, channel_username, part_dir_path), stdout=FNULL, stderr=subprocess.STDOUT, shell=True)
-
+        shutil.rmtree(part_dir_path)
 if __name__ == "__main__":
     SEARCH_WORD = sys.argv[2]
     URL = sys.argv[1]

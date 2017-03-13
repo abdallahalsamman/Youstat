@@ -192,6 +192,9 @@ def split_results(results):
             no_subtitle_videos += [id]
     return (english_videos, non_english_videos, no_subtitle_videos)
 
+def split_array(arr, elems_per_array):
+    return [arr[i:i+elems_per_array] for i in range(0, len(arr), elems_per_array)]
+
 def get_subtitle_statistics(sub):
     r = s.post(url = 'https://tone-analyzer-demo.mybluemix.net/api/tone',
         data = {'text': sub},
@@ -205,7 +208,7 @@ def get_playlist(channel, token=None):
     else:
         return playlist['items']
 
-def words_frequency(subtitles, stopwords):
+def words_frequency(subtitles, stopwords, acc):
     def sort_words_by_freq(words):
         return sorted(words.items(), key=lambda v: v[1], reverse=True)
 
@@ -225,14 +228,13 @@ def words_frequency(subtitles, stopwords):
                 words[word] = 1
         return words
 
-    def process_subs(subtitles):
-        words = {}
+    def process_subs(subtitles, acc):
+        words = acc
         for subtitle in subtitles:
             clean_subtitle = rm_stop_words(subtitle)
             words = count_words(clean_subtitle, words)
         return words
-
-    words = process_subs(subtitles)
+    words = process_subs(subtitles, acc)
     return sort_words_by_freq(words)[0:100]
 
 def get_stopwords_lang(lang):
@@ -278,75 +280,109 @@ def start(data):
                 return HttpResponse(json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE]))
             video_ids = [user_input_id]
 
-        subtitles_from_db = [
-            db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db]
+        video_ids_chunks = split_array(video_ids, 20)
+        video_ids_chunks_len = len(video_ids_chunks)
+        video_ids_in_db_chunks = split_array(video_ids_in_db, len(video_ids_in_db) / video_ids_chunks_len)
+        frequent_words = {}
+        for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
+            subtitles_from_db = [
+                db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index] if video_ids_in_db_chunks and video_ids_in_db_chunks[chunk_index]]
 
-        video_ids_len = len(video_ids)
-        manual_sub_langs = grequests.map(
-            [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids) ], size=50)
+            print 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
+            video_ids_len = len(video_ids_chunk)
+            manual_sub_langs = grequests.map(
+                [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids_chunk) ], size=50)
 
-        url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
-            split_results([make_manual_sub(video_id, manual_sub_langs[index].text) for index, video_id in enumerate(video_ids) if manual_sub_langs[index]]) )
+            url_manual_subs, url_manual_subs_non_en, video_ids_no_manual_subs = (
+                split_results([make_manual_sub(video_id, manual_sub_langs[index].text) for index, video_id in enumerate(video_ids_chunk) if manual_sub_langs[index]]) )
 
-        video_ids_no_manual_subs_len = len(video_ids_no_manual_subs)
-        videos_pages = grequests.map(
-            [ get_video_page(i, index, video_ids_no_manual_subs_len) for index, i in enumerate(video_ids_no_manual_subs) ], size=50)
+            video_ids_no_manual_subs_len = len(video_ids_no_manual_subs)
+            videos_pages = grequests.map(
+                [ get_video_page(i, index, video_ids_no_manual_subs_len) for index, i in enumerate(video_ids_no_manual_subs) ], size=50)
 
-        url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
-            split_results([make_auto_sub(video_id, videos_pages[index].text) for index, video_id in enumerate(video_ids_no_manual_subs) if videos_pages[index] ]) )
+            url_auto_subs, url_auto_subs_non_en, video_ids_no_auto_subs = (
+                split_results([make_auto_sub(video_id, videos_pages[index].text) for index, video_id in enumerate(video_ids_no_manual_subs) if videos_pages[index] ]) )
 
-        url_manual_subs_len = len(url_manual_subs)
-        url_auto_subs_len = len(url_auto_subs)
-        manual_subs_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_manual_subs_len) for index, sub in enumerate(url_manual_subs) ], size=50)
-        auto_subs_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_auto_subs_len) for index, sub in enumerate(url_auto_subs) ], size=50)
+            url_manual_subs_len = len(url_manual_subs)
+            url_auto_subs_len = len(url_auto_subs)
+            manual_subs_pages = grequests.map(
+                [ greq_get_text(sub[1][1], index, url_manual_subs_len) for index, sub in enumerate(url_manual_subs) ], size=50)
+            auto_subs_pages = grequests.map(
+                [ greq_get_text(sub[1][1], index, url_auto_subs_len) for index, sub in enumerate(url_auto_subs) ], size=50)
 
-        manual_subs, auto_subs = tuple(
-            [ ( sub[0]
-              , ( sub[1][0]
-                , format_subtitles( (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index].text )
-                , (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index].text
-                )
-              ) for index, sub in enumerate(sub_cat)
-              if (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index]
-            ] for cat_ind, sub_cat in enumerate( (url_manual_subs, url_auto_subs) ) )
+            manual_subs, auto_subs = tuple(
+                [ ( sub[0]
+                  , ( sub[1][0]
+                    , format_subtitles( (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index].text )
+                    , (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index].text
+                    )
+                  ) for index, sub in enumerate(sub_cat)
+                  if (manual_subs_pages if cat_ind is 0 else auto_subs_pages)[index]
+                ] for cat_ind, sub_cat in enumerate( (url_manual_subs, url_auto_subs) ) )
 
-        url_manual_subs_non_en_len = len(url_manual_subs_non_en)
-        url_auto_subs_non_en_len = len(url_auto_subs_non_en)
+            url_manual_subs_non_en_len = len(url_manual_subs_non_en)
+            url_auto_subs_non_en_len = len(url_auto_subs_non_en)
 
-        manual_subs_non_en_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
-        manual_subs_non_en_trans_pages = grequests.map(
-            [ greq_get_text(sub[2][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
-        auto_subs_non_en_pages = grequests.map(
-            [ greq_get_text(sub[1][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
-        auto_subs_non_en_trans_pages = grequests.map(
-            [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
+            manual_subs_non_en_pages = grequests.map(
+                [ greq_get_text(sub[1][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
+            manual_subs_non_en_trans_pages = grequests.map(
+                [ greq_get_text(sub[2][1], index, url_manual_subs_non_en_len) for index, sub in enumerate(url_manual_subs_non_en) ], size=50)
+            auto_subs_non_en_pages = grequests.map(
+                [ greq_get_text(sub[1][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
+            auto_subs_non_en_trans_pages = grequests.map(
+                [ greq_get_text(sub[2][1], index, url_auto_subs_non_en_len) for index, sub in enumerate(url_auto_subs_non_en) ], size=50)
 
-        manual_subs_non_en, auto_subs_non_en = tuple(
-            [
-                ( sub[0]
-                , ( sub[1][0]
-                    , format_subtitles( (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text )
-                    , (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text )
-                , ( sub[2][0]
-                    , format_subtitles( (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text )
-                    , (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text )
-                )
-                for index, sub in enumerate(sub_cat)
-                if (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index]
-                    and (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
-            ] for cat_ind, sub_cat in enumerate( (url_manual_subs_non_en, url_auto_subs_non_en) ) )
+            manual_subs_non_en, auto_subs_non_en = tuple(
+                [
+                    ( sub[0]
+                    , ( sub[1][0]
+                        , format_subtitles( (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text )
+                        , (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index].text )
+                    , ( sub[2][0]
+                        , format_subtitles( (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text )
+                        , (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index].text )
+                    )
+                    for index, sub in enumerate(sub_cat)
+                    if (manual_subs_non_en_pages if cat_ind is 0 else auto_subs_non_en_pages)[index]
+                        and (manual_subs_non_en_trans_pages if cat_ind is 0 else auto_subs_non_en_trans_pages)[index]
+                ] for cat_ind, sub_cat in enumerate( (url_manual_subs_non_en, url_auto_subs_non_en) ) )
 
-        subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en, subtitles_from_db)
-        if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3] or subtitles[4]:
-            original_subs = extract_original_subs(subtitles)
-            english_subs = extract_english_subs(subtitles)
-            subs_pages = manual_subs_pages + auto_subs_pages + manual_subs_non_en_pages + auto_subs_non_en_pages
-            translated_subs_pages = manual_subs_non_en_trans_pages + auto_subs_non_en_trans_pages
-            stopwords = get_stopwords( extract_langs ( original_subs ) )
-            frequent_words = words_frequency( original_subs, stopwords )
+            subtitles = (manual_subs, manual_subs_non_en, auto_subs, auto_subs_non_en, subtitles_from_db)
+            if subtitles[0] or subtitles[1] or subtitles[2] or subtitles[3] or subtitles[4]:
+                original_subs = extract_original_subs(subtitles)
+                english_subs = extract_english_subs(subtitles)
+                subs_pages = manual_subs_pages + auto_subs_pages + manual_subs_non_en_pages + auto_subs_non_en_pages
+                translated_subs_pages = manual_subs_non_en_trans_pages + auto_subs_non_en_trans_pages
+                stopwords = get_stopwords( extract_langs ( original_subs ) )
+                frequent_words = words_frequency( original_subs, stopwords, dict(frequent_words) )
+                if user_input_kind in ['channel', 'user']:
+                    for sub_category in subtitles:
+                        for sub in sub_category:
+                            Videos.objects.update_or_create(
+                                video_id=sub[0]
+                                , defaults={
+                                    'subtitle_original': sub[1][2]
+                                    , 'subtitle_original_formatted': sub[1][1]
+                                    , 'subtitle_original_lang': sub[1][0]
+                                    , 'subtitle_translated': sub[2][2] if len(sub) == 3 and sub[2] else ''
+                                    , 'subtitle_translated_formatted': sub[2][1] if len(sub) == 3 and sub[2] else ''
+                                    , 'words_count': words_frequency( [sub[1]], stopwords, {} )
+                                }
+                            )
+                elif user_input_kind == 'video':
+                    Videos.objects.update_or_create(
+                        video_id=video_ids[0]
+                        , defaults={
+                            'subtitle_original': subs_pages[0].text if subs_pages else ''
+                            , 'subtitle_original_formatted': original_subs[0][1]
+                            , 'subtitle_original_lang': original_subs[0][0]
+                            , 'subtitle_translated': translated_subs_pages[0].text if translated_subs_pages else ''
+                            , 'subtitle_translated_formatted': format_subtitles(translated_subs_pages[0].text) if translated_subs_pages else ''
+                            , 'words_count': frequent_words
+                        }
+                    )
+                # beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
+        if frequent_words:
             if user_input_kind in ['channel', 'user']:
                 Channels.objects.update_or_create(
                     channel_id=channel_id
@@ -355,32 +391,6 @@ def start(data):
                         , 'words_count': frequent_words
                     }
                 )
-                for sub_category in subtitles:
-                    for sub in sub_category:
-                        Videos.objects.update_or_create(
-                            video_id=sub[0]
-                            , defaults={
-                                'subtitle_original': sub[1][2]
-                                , 'subtitle_original_formatted': sub[1][1]
-                                , 'subtitle_original_lang': sub[1][0]
-                                , 'subtitle_translated': sub[2][2] if len(sub) == 3 and sub[2] else ''
-                                , 'subtitle_translated_formatted': sub[2][1] if len(sub) == 3 and sub[2] else ''
-                                , 'words_count': words_frequency( [sub[1]], stopwords )
-                            }
-                        )
-            elif user_input_kind == 'video':
-                Videos.objects.update_or_create(
-                    video_id=video_ids[0]
-                    , defaults={
-                        'subtitle_original': subs_pages[0].text if subs_pages else ''
-                        , 'subtitle_original_formatted': original_subs[0][1]
-                        , 'subtitle_original_lang': original_subs[0][0]
-                        , 'subtitle_translated': translated_subs_pages[0].text if translated_subs_pages else ''
-                        , 'subtitle_translated_formatted': format_subtitles(translated_subs_pages[0].text) if translated_subs_pages else ''
-                        , 'words_count': frequent_words
-                    }
-                )
-            # beautiful_stats = beautify_stats ( get_subtitle_statistics( english_subs[0][1] ) )
             return HttpResponse(json.dumps(frequent_words[0:TOP_WORDS_SIZE]))
         return HttpResponse(json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]]))
     else:
