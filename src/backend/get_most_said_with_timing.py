@@ -2,7 +2,7 @@
 import django
 django.setup()
 
-import sys, re, os, subprocess, shutil
+import sys, re, os, subprocess, shutil, pipes
 from youstat.models import Channels, Videos
 from youstat import apps
 from bs4 import BeautifulSoup
@@ -30,7 +30,7 @@ def make_part_folder_path(output_folder, part):
     return os.path.abspath( os.path.join(output_folder, "part" + str(part)) )
 
 def make_mp4_to_ts_conv_cmd(mp4file):
-    return '/usr/local/bin/ffmpeg -i '+mp4file+' -map 0 -n -c copy -f mpegts '+mp4file+'.ts'
+    return '/usr/local/bin/ffmpeg -i '+pipes.quote(mp4file)+' -map 0 -n -c copy -f mpegts '+pipes.quote(mp4file)+'.ts'
 
 def make_mp4_to_ts_conv_cmds(part_dir_path):
     return [
@@ -42,7 +42,7 @@ def make_mp4_to_ts_conv_cmds(part_dir_path):
 def make_ffmpeg_download_part_cmd(part_video):
     return "/usr/local/bin/ffmpeg -n -ss " +part_video[1] + \
     " -i $(/usr/local/bin/youtube-dl -f mp4 --get-url https://www.youtube.com/watch?v=" + part_video[0]+")" + \
-    " -t "+ str(float(part_video[2])) + " " + part_video[5] if not os.path.exists(part_video[5]) else ''
+    " -t "+ str(float(part_video[2])) + " " + pipes.quote(part_video[5]) if not os.path.exists(part_video[5]) else ''
 
 def make_ffmpeg_download_part_cmds(part_videos):
     return [
@@ -59,14 +59,13 @@ def make_upload_to_youtube_cmd(part, channel_username, part_dir_path):
     return 'PYTHONPATH=./video_bot/youtube-upload-master ' + \
         'python ./video_bot/youtube-upload-master/bin/youtube-upload ' + \
         '--client-secrets=./video_bot/client_secret.json ' + \
-        '--title="'+channel_username.upper()+' All "'+SEARCH_WORD.capitalize() + '\!" Moments' +part_str+'" ' + \
+        '--title="'+channel_username.upper()+' Saying '+SEARCH_WORD.capitalize() + part_str+'" ' + \
         '--description="Which youtuber would you like to see next, and saying which word?" ' + \
         '--category=Entertainment ' + \
         '--tags="'+channel_username.lower()+',evexo,youtubers saying,evex o,WORDS ON YOUTUBERS,'+channel_username.lower()+' saying '+SEARCH_WORD+', saying '+SEARCH_WORD+'" ' + \
         '--default-language="en" ' + \
         '--playlist "'+channel_username.lower()+'" ' + \
-        '--privacy public ' + \
-        os.path.join(part_dir_path, 'output.mp4')
+        '--privacy public ' + pipes.quote(os.path.join(part_dir_path, 'output.mp4'))
 
 def main(SEARCH_WORD, URL):
     user_input_kind, user_input_id = apps.user_input_info(URL)
@@ -75,7 +74,7 @@ def main(SEARCH_WORD, URL):
             channel = apps.get_channel(user_input_kind, user_input_id)
             channel_username = "".join(x for x in apps.extract_channel_name(channel) if x.isalnum())
             CHANNEL_ID = apps.extract_channel_id(channel)
-            apps.start({'url': URL, 'accurate': 'false'})
+            apps.start({'url': URL, 'accurate': 'true'})
             CHANNEL_DB = Channels.objects.get(channel_id=CHANNEL_ID)
 
     output_folder =  os.path.abspath( os.path.join( "video_bot", channel_username, SEARCH_WORD.strip() ) )
@@ -83,6 +82,7 @@ def main(SEARCH_WORD, URL):
     video_ids_chunks_len = len(video_ids_chunks)
 
     duration = 0
+    part = 0
     parts_videos = []
     for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
         print 'BOT: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
@@ -117,8 +117,8 @@ def main(SEARCH_WORD, URL):
     FNULL = open(os.devnull, 'w')
     parts = range(1, part+1)
     for part in parts:
+        if part > 3: continue
         part_videos = [video for video in parts_videos if video[4] == part]
-
         part_dir_path = make_part_folder_path( output_folder, part )
         os.makedirs( part_dir_path ) if not os.path.exists( part_dir_path ) else ''
 
@@ -126,7 +126,13 @@ def main(SEARCH_WORD, URL):
         dl_part_videos_count = len(dl_cmds)
         bar = Bar('Part %d/%d: Downloading videos' % (part, parts[-1]), max=dl_part_videos_count)
         for i, cmd in enumerate(dl_cmds):
-            subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+            success = False
+            while success is False:
+                try:
+                    subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+                    success = True
+                except OSError:
+                    pass 
             bar.next()
         bar.finish()
 
@@ -134,7 +140,13 @@ def main(SEARCH_WORD, URL):
         part_videos_count = len(conv_cmds)
         bar = Bar("Part %d/%d: Converting video(mp4 -> ts)" % (part, parts[-1]), max=part_videos_count)
         for i, cmd in enumerate(conv_cmds):
-            subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+	    success = False
+	    while success is False:
+                try:
+                    subprocess.call( cmd, stdout=FNULL, stderr=subprocess.STDOUT, shell=True )
+		    success = True
+                except OSError:
+		    pass
             bar.next()
         bar.finish()
 

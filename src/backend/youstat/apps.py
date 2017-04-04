@@ -282,11 +282,11 @@ def start(data):
 
         video_ids_chunks = split_array(video_ids, 20)
         video_ids_chunks_len = len(video_ids_chunks)
-        video_ids_in_db_chunks = split_array(video_ids_in_db, len(video_ids_in_db) / video_ids_chunks_len)
+        video_ids_in_db_chunks = split_array(video_ids_in_db, len(video_ids_in_db) / video_ids_chunks_len) if video_ids_in_db else []
         frequent_words = {}
         for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
             subtitles_from_db = [
-                db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index] if video_ids_in_db_chunks and video_ids_in_db_chunks[chunk_index]]
+                db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index]] if video_ids_in_db_chunks else []
 
             print 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
             video_ids_len = len(video_ids_chunk)
