@@ -26,6 +26,11 @@ $('document').ready(function(){
     };
 
     $('#btn_submit').click(submit);
+    $("#input_channel").keyup(function(e){
+      if(e.keyCode == 13){
+        submit(e);
+      }
+    });
     $('#btn_accurate').click(submit);
     $('#input_channel').bind("enterKey", submit);
 

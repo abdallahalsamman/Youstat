@@ -139,7 +139,7 @@ def user_input_info(user_input):
                 if len(split_path) > 2:
                     return (split_path[1], split_path[2])
     else:
-        return (None, None)
+        return ('user', user_input)
 
 def db_sub_to_runtime(record):
     return (
