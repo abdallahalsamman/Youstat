@@ -18,7 +18,13 @@ $('document').ready(function(){
         var xhr = new XMLHttpRequest()
         xhr.open("GET", "/api?url="+encodeURIComponent(user_input)+"&accurate="+ (e.target.id == "btn_accurate" ? "true" : "false"), true)
         xhr.onprogress = function () {
-          console.log("PROGRESS:", xhr.responseText)
+          percentages = xhr.responseText.replace(/\s/g,"").split("%")
+          last_percentage = percentages[percentages.length-1]
+          if(last_percentage){
+            render_frequent_words(last_percentage)
+          }else{
+            $("#result")[0].innerHTML = percentages[percentages.length-2]+"%"
+          }
         }
         xhr.send()
         /*$.get({

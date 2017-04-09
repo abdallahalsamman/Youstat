@@ -3,9 +3,10 @@ from __future__ import unicode_literals
 # coding=utf-8
 
 from django.apps import AppConfig
-from django.http import HttpResponse
+from django.http import StreamingHttpResponse
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
+from django.views.decorators.http import condition
 
 from models import Channels, Videos
 
@@ -270,6 +271,7 @@ def start(data):
             channel_db = Channels.objects.filter(channel_id=channel_id)
             if channel_db.exists() and not accurate:
                 yield json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE])
+                yield " " * 1024
                 raise StopIteration 
             items = get_playlist(channel)
             channel_video_ids = [extract_video_id(item) for item in items if is_video(item)]
@@ -279,12 +281,13 @@ def start(data):
             video_db = Videos.objects.filter(video_id=user_input_id)
             if video_db.exists() and not accurate:
                 yield json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE])
+                yield " " * 1024
                 raise StopIteration 
             video_ids = [user_input_id]
 
         video_ids_chunks = split_array(video_ids, 20)
         video_ids_chunks_len = len(video_ids_chunks)
-        video_ids_in_db_chunks = split_array(video_ids_in_db, 20)if video_ids_in_db else []
+        video_ids_in_db_chunks = split_array(video_ids_in_db, 20) if video_ids_in_db else []
         video_ids_in_db_chunks_len = len(video_ids_in_db_chunks)
         frequent_words = {}
         for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
@@ -292,7 +295,8 @@ def start(data):
                 db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index]
             ] if video_ids_in_db_chunks and video_ids_in_db_chunks_len > chunk_index else []
 
-            yield 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
+            yield '%.0f%%' % (((chunk_index+1)*100)/float(video_ids_chunks_len))
+            yield " " * 1024
             print'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
             video_ids_len = len(video_ids_chunk)
             manual_sub_langs = grequests.map(
@@ -397,12 +401,19 @@ def start(data):
                     }
                 )
             yield json.dumps(frequent_words[0:TOP_WORDS_SIZE])
+            yield " " * 1024
             raise StopIteration
         yield json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]])
+
+        yield " " * 1024
         raise StopIteration
     else:
         yield json.dumps([["Please input a youtube channel/video url", ""]])
+        yield " " * 1024
         raise StopIteration
 
+@condition(etag_func=None)
 def main(request, args):
-    return HttpResponse(start(request.GET))
+    res = StreamingHttpResponse(start(request.GET))
+    res['Content-Encoding'] = 'identity'
+    return res

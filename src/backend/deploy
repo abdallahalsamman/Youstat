@@ -1,0 +1,7 @@
+python manage.py collectstatic --noinput -c
+uwsgi --http :8082 \
+  --wsgi-file /home/ubuntu/youstat/src/backend/backend/wsgi.py \
+  --master \
+  --chdir=/home/ubuntu/youstat/src/backend \
+  --max-requests=20 \
+  --static-map /static=/home/ubuntu/youstat/src/backend/static
