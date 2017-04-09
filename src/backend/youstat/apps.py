@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 # coding=utf-8
 
 from django.apps import AppConfig
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 
@@ -284,11 +284,13 @@ def start(data):
 
         video_ids_chunks = split_array(video_ids, 20)
         video_ids_chunks_len = len(video_ids_chunks)
-        video_ids_in_db_chunks = split_array(video_ids_in_db, len(video_ids_in_db) / video_ids_chunks_len) if video_ids_in_db else []
+        video_ids_in_db_chunks = split_array(video_ids_in_db, 20)if video_ids_in_db else []
+        video_ids_in_db_chunks_len = len(video_ids_in_db_chunks)
         frequent_words = {}
         for chunk_index, video_ids_chunk in enumerate(video_ids_chunks):
             subtitles_from_db = [
-                db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index]] if video_ids_in_db_chunks else []
+                db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index]
+            ] if video_ids_in_db_chunks and video_ids_in_db_chunks_len > chunk_index else []
 
             yield 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
             print'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
@@ -403,4 +405,4 @@ def start(data):
         raise StopIteration
 
 def main(request, args):
-    return StreamingHttpResponse(start(request.GET))
+    return HttpResponse(start(request.GET))
