@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 # coding=utf-8
 
 from django.apps import AppConfig
-from django.http import HttpResponse
+from django.http import StreamingHttpResponse
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 
@@ -269,7 +269,8 @@ def start(data):
             channel_id = extract_channel_id(channel)
             channel_db = Channels.objects.filter(channel_id=channel_id)
             if channel_db.exists() and not accurate:
-                return HttpResponse(json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE]))
+                yield json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE])
+                raise StopIteration 
             items = get_playlist(channel)
             channel_video_ids = [extract_video_id(item) for item in items if is_video(item)]
             video_ids = [video_id for video_id in channel_video_ids if not Videos.objects.filter(video_id=video_id).exists()]
@@ -277,7 +278,8 @@ def start(data):
         elif user_input_kind == 'video':
             video_db = Videos.objects.filter(video_id=user_input_id)
             if video_db.exists() and not accurate:
-                return HttpResponse(json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE]))
+                yield json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE])
+                raise StopIteration 
             video_ids = [user_input_id]
 
         video_ids_chunks = split_array(video_ids, 20)
@@ -288,7 +290,8 @@ def start(data):
             subtitles_from_db = [
                 db_sub_to_runtime(Videos.objects.get(video_id=video_id)) for video_id in video_ids_in_db_chunks[chunk_index]] if video_ids_in_db_chunks else []
 
-            print 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
+            yield 'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
+            print'APP: Processing Chunk %d/%d' % (chunk_index+1, video_ids_chunks_len)
             video_ids_len = len(video_ids_chunk)
             manual_sub_langs = grequests.map(
                 [ get_manual_sub_langs(i, index, video_ids_len) for index, i in enumerate(video_ids_chunk) ], size=50)
@@ -391,10 +394,13 @@ def start(data):
                         , 'words_count': frequent_words
                     }
                 )
-            return HttpResponse(json.dumps(frequent_words[0:TOP_WORDS_SIZE]))
-        return HttpResponse(json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]]))
+            yield json.dumps(frequent_words[0:TOP_WORDS_SIZE])
+            raise StopIteration
+        yield json.dumps([["No subtitles in "+ user_input_kind +" to analyse: ", user_input_id]])
+        raise StopIteration
     else:
-        return HttpResponse(json.dumps([["Please input a youtube channel/video url", ""]]))
+        yield json.dumps([["Please input a youtube channel/video url", ""]])
+        raise StopIteration
 
 def main(request, args):
-    return start(request.GET)
+    return StreamingHttpResponse(start(request.GET))

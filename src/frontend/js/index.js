@@ -15,14 +15,20 @@ $('document').ready(function(){
     var submit = function(e){
         user_input = $('#input_channel')[0].value;
         $("#result")[0].innerHTML = "Loading...";
-        $.get({
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "/api?url="+encodeURIComponent(user_input)+"&accurate="+ (e.target.id == "btn_accurate" ? "true" : "false"), true)
+        xhr.onprogress = function () {
+          console.log("PROGRESS:", xhr.responseText)
+        }
+        xhr.send()
+        /*$.get({
             url: '/api'
             , data: {
                 url: user_input
                 , accurate: e.target.id == "btn_accurate"
             }
             , success: render_frequent_words
-        });
+        });*/
     };
 
     $('#btn_submit').click(submit);
