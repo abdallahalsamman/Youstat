@@ -4,4 +4,5 @@ uwsgi --http :8082 \
   --master \
   --chdir=/home/ubuntu/youstat/src/backend \
   --max-requests=20 \
-  --static-map /static=/home/ubuntu/youstat/src/backend/static
+  --static-map /static=/home/ubuntu/youstat/src/backend/static \
+  --daemonize=/home/ubuntu/youstat/youstat.log 

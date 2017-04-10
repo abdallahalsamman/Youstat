@@ -23,6 +23,7 @@ body{
     padding: 0px 5px;
     font-size: 18px;
     width: 30%;
+    min-width: 300px;
 }
 
 #btn_submit, #btn_accurate{
@@ -31,12 +32,14 @@ body{
 
 #result font{
     width: calc(30% + 55px);
+    min-width: 300px;
     display: block;
     text-align: left;
 }
 
 #result table{
     border-collapse: collapse;
+    min-width:355px;
     width:40%;
     font-size: 30px;
     text-align: center;

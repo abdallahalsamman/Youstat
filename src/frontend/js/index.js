@@ -23,18 +23,10 @@ $('document').ready(function(){
           if(last_percentage){
             render_frequent_words(last_percentage)
           }else{
-            $("#result")[0].innerHTML = percentages[percentages.length-2]+"%"
+            $("#result")[0].innerHTML = "<h3>"+percentages[percentages.length-2]+"%</h3>"
           }
         }
         xhr.send()
-        /*$.get({
-            url: '/api'
-            , data: {
-                url: user_input
-                , accurate: e.target.id == "btn_accurate"
-            }
-            , success: render_frequent_words
-        });*/
     };
 
     $('#btn_submit').click(submit);

@@ -38,7 +38,7 @@ s.mount('https://', b)
 
 PAGE_SIZE = 50
 
-TOP_WORDS_SIZE = 5 # the top 30 frequent words
+TOP_WORDS_SIZE = 15 # the top 30 frequent words
 STOPWORDS_FOLDER = os.path.dirname(os.path.abspath(__file__)) + "/" + "stopwords"
 
 def channel_url(kind, id):
@@ -51,11 +51,14 @@ def playlist_url(id, token):
     url = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&maxResults="+ str(PAGE_SIZE) +"&playlistId="+id+"&key="+API_KEY
     return url + (("&pageToken=" + token) if token else "")
 
+def search_url(query):
+    return "https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=10&type=video,channel&q=%s&key=%s" % (query, API_KEY)
+
 def uploads_id(channel):
     return channel['items'][0]['contentDetails']['relatedPlaylists']['uploads']
 
 def extract_channel_id(channel):
-    return channel['items'][0]['id']
+    return channel['items'][0]['id'] if 'items' in channel and channel['items'] and 'id' in channel['items'][0] else None 
 
 def extract_channel_name(channel):
     return channel['items'][0]['snippet']['title']
@@ -268,6 +271,11 @@ def start(data):
         if user_input_kind in ['channel', 'user']:
             channel = get_channel(user_input_kind, user_input_id)
             channel_id = extract_channel_id(channel)
+            if channel_id is None:
+              search_json = get_json( search_url( user_input_id ) )
+              yield json.dumps(search_json)
+	      yield " " * 1024
+	      raise StopIteration
             channel_db = Channels.objects.filter(channel_id=channel_id)
             if channel_db.exists() and not accurate:
                 yield json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE])
