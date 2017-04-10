@@ -37,7 +37,7 @@ $('document').ready(function(){
           percentages = xhr.responseText.replace(/\s/g,"").split("%")
           last_percentage = percentages[percentages.length-1]
           if (last_percentage){
-            render_frequent_words(last_percentage)
+            render_frequent_words(xhr.responseText.split("%")[percentages.length-1])
           }else{
             $("#result")[0].innerHTML = "<h3>"+percentages[percentages.length-2]+"%</h3>"
           }
