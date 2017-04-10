@@ -33,7 +33,7 @@ body{
 #result font{
     width: calc(30% + 55px);
     min-width: 300px;
-    display: block;
+    display: table-caption;
     text-align: left;
 }
 
@@ -47,4 +47,22 @@ body{
 
 #result table td{
     padding: 7px;
+}
+
+#result .search_result a{
+  color: blue;
+  margin-bottom: 5px;
+  border-radius: 40px;
+}
+
+#result .thumbnail, #result .content{
+  display: inline-block;
+  vertical-align: middle;
+  margin: 5px;
+}
+
+#result .thumbnail{
+    background-color: whitesmoke;
+    width: 320px;
+    height: 180px;
 }

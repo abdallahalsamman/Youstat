@@ -58,7 +58,7 @@ def uploads_id(channel):
     return channel['items'][0]['contentDetails']['relatedPlaylists']['uploads']
 
 def extract_channel_id(channel):
-    return channel['items'][0]['id'] if 'items' in channel and channel['items'] and 'id' in channel['items'][0] else None 
+    return channel['items'][0]['id'] if 'items' in channel and channel['items'] and 'id' in channel['items'][0] else None
 
 def extract_channel_name(channel):
     return channel['items'][0]['snippet']['title']
@@ -280,7 +280,7 @@ def start(data):
             if channel_db.exists() and not accurate:
                 yield json.dumps(channel_db[0].words_count[0:TOP_WORDS_SIZE])
                 yield " " * 1024
-                raise StopIteration 
+                raise StopIteration
             items = get_playlist(channel)
             channel_video_ids = [extract_video_id(item) for item in items if is_video(item)]
             video_ids = [video_id for video_id in channel_video_ids if not Videos.objects.filter(video_id=video_id).exists()]
@@ -290,8 +290,9 @@ def start(data):
             if video_db.exists() and not accurate:
                 yield json.dumps(video_db[0].words_count[0:TOP_WORDS_SIZE])
                 yield " " * 1024
-                raise StopIteration 
+                raise StopIteration
             video_ids = [user_input_id]
+            video_ids_in_db = []
 
         video_ids_chunks = split_array(video_ids, 20)
         video_ids_chunks_len = len(video_ids_chunks)
